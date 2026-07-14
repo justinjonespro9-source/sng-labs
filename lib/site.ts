@@ -24,7 +24,8 @@ export const contactMailto = `mailto:${PUBLIC_CONTACT_EMAIL}`;
 
 export const siteAssets = {
   logo: "/sng-labs-logo.png",
-  innovationLab: "/innovation-lab.jpg",
+  /** Full-bleed hero background — scene only, no baked-in UI. */
+  innovationLabHero: "/innovation-lab-hero.jpg",
 } as const;
 
 /* -----------------------------------------------------------------------------

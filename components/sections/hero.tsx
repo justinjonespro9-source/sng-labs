@@ -2,61 +2,52 @@ import Image from "next/image";
 import { ButtonLink } from "@/components/ui/button-link";
 import { partnerHref, siteAssets } from "@/lib/site";
 
-function InnovationLabVisual() {
-  return (
-    <figure className="relative w-full">
-      <Image
-        src={siteAssets.innovationLab}
-        alt="SNG Labs Innovation Lab at night: an open garage workspace under an aurora-lit sky, with a glowing Innovation Lab sign, warm interior light, desk and computer, ping pong table, and pinball machine."
-        width={1024}
-        height={682}
-        sizes="(max-width: 1024px) 92vw, 48vw"
-        priority
-        className="h-auto w-full"
-      />
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 bottom-0 h-1/4 bg-gradient-to-t from-background via-background/40 to-transparent"
-      />
-    </figure>
-  );
-}
-
 export function HeroSection() {
   return (
     <section
       id="top"
-      className="relative overflow-hidden px-6 pb-28 pt-20 sm:px-8 sm:pb-32 sm:pt-28 lg:px-10 lg:pb-40 lg:pt-32"
+      className="relative isolate flex min-h-[calc(100svh-4.5rem)] items-end overflow-hidden md:min-h-[calc(100svh-4.75rem)] md:items-center"
     >
-      <div aria-hidden="true" className="pointer-events-none absolute inset-0">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_15%_0%,rgba(184,212,200,0.05),transparent_42%),radial-gradient(ellipse_at_90%_20%,rgba(168,189,212,0.04),transparent_40%)]" />
-        <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-background to-transparent" />
+      <div className="absolute inset-0 -z-10">
+        <Image
+          src={siteAssets.innovationLabHero}
+          alt="SNG Labs Innovation Lab at night: an open garage workspace under an aurora-filled sky, with a glowing Innovation Lab sign, warm interior lighting, desk and computer, ping-pong table, and pinball machine."
+          fill
+          priority
+          sizes="100vw"
+          className="object-cover object-[68%_42%] sm:object-[72%_40%] md:object-[78%_45%] lg:object-[82%_48%]"
+        />
+        <div
+          aria-hidden="true"
+          className="absolute inset-0 bg-gradient-to-r from-background via-background/88 to-background/15 sm:via-background/80 sm:to-background/10 lg:via-background/72 lg:to-transparent"
+        />
+        <div
+          aria-hidden="true"
+          className="absolute inset-0 bg-gradient-to-t from-background via-background/35 to-transparent sm:via-background/20"
+        />
+        <div
+          aria-hidden="true"
+          className="absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-background to-transparent md:h-36"
+        />
       </div>
 
-      <div className="relative mx-auto grid max-w-6xl items-center gap-14 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] lg:gap-12 xl:gap-16">
-        <div className="max-w-2xl">
-          <p className="animate-fade-up font-display text-sm font-semibold tracking-[0.28em] text-foreground sm:text-base">
-            SNG LABS
-          </p>
-          <h1 className="animate-fade-up-delay-1 mt-14 max-w-[14ch] font-display text-5xl font-semibold tracking-tight text-foreground sm:mt-16 sm:max-w-none sm:text-6xl lg:mt-[4.5rem] lg:text-[4.75rem] lg:leading-[1.02]">
+      <div className="relative z-10 mx-auto flex w-full max-w-6xl px-6 pb-20 pt-16 sm:px-8 sm:pb-24 sm:pt-20 lg:px-10 lg:pb-28 lg:pt-24">
+        <div className="max-w-xl lg:max-w-2xl">
+          <h1 className="animate-fade-up max-w-[14ch] font-display text-4xl font-semibold tracking-tight text-foreground sm:max-w-none sm:text-5xl md:text-6xl lg:text-[4.5rem] lg:leading-[1.02]">
             <span className="block">Transforming Fans</span>
             <span className="mt-1 block sm:mt-1.5">from Spectators</span>
             <span className="mt-1 block sm:mt-1.5">into Participants.</span>
           </h1>
-          <p className="animate-fade-up-delay-2 mt-10 max-w-[26ch] text-base leading-relaxed text-muted sm:mt-12 sm:max-w-[28ch] sm:text-lg">
+          <p className="animate-fade-up-delay-1 mt-8 max-w-[28ch] text-base leading-relaxed text-muted-strong sm:mt-10 sm:max-w-[30ch] sm:text-lg">
             We create original platforms that give sports fans new ways to
             compete, connect, contribute, and be recognized.
           </p>
-          <div className="animate-fade-up-delay-3 mt-12 flex flex-col gap-3 sm:flex-row sm:items-center lg:mt-14">
-            <ButtonLink href="#products">Explore Our Products</ButtonLink>
+          <div className="animate-fade-up-delay-2 mt-10 flex flex-col gap-3 sm:mt-12 sm:flex-row sm:items-center">
+            <ButtonLink href="#products">Explore the Portfolio</ButtonLink>
             <ButtonLink href={partnerHref} variant="secondary">
               Partner With Us
             </ButtonLink>
           </div>
-        </div>
-
-        <div className="animate-fade-up-delay-4 w-full min-w-0 lg:pl-2">
-          <InnovationLabVisual />
         </div>
       </div>
     </section>

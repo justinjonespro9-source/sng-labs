@@ -59,8 +59,8 @@ export function SiteHeader() {
     <header
       className={`sticky top-0 z-50 border-b transition-[background-color,border-color,backdrop-filter,box-shadow] duration-300 ${
         scrolled || open
-          ? "border-border bg-background/75 shadow-[0_10px_40px_rgba(0,0,0,0.25)] backdrop-blur-xl"
-          : "border-transparent bg-background/30 backdrop-blur-md"
+          ? "border-border bg-background/80 shadow-[0_10px_40px_rgba(0,0,0,0.28)] backdrop-blur-xl"
+          : "border-transparent bg-background/55 backdrop-blur-md"
       }`}
     >
       <div className="mx-auto flex min-h-[4.5rem] max-w-6xl items-center justify-between gap-4 px-6 py-3 sm:px-8 md:min-h-[4.75rem] md:py-3.5 lg:px-10">

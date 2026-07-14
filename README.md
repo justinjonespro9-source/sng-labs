@@ -22,7 +22,7 @@ Update the labeled constants in [`lib/site.ts`](lib/site.ts) before production:
 Replace image assets in `/public` with final originals:
 
 - `sng-labs-logo.png`
-- `innovation-lab.jpg`
+- `innovation-lab-hero.jpg`
 
 ## Scripts
 
