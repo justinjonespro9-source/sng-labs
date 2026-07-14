@@ -57,22 +57,25 @@ export function SiteHeader() {
 
   return (
     <header
-      className={`sticky top-0 z-50 border-b transition-[background-color,border-color,backdrop-filter,box-shadow] duration-300 ${
+      className={`sticky top-0 z-30 border-b transition-[background-color,border-color,backdrop-filter,box-shadow] duration-300 ${
         scrolled || open
-          ? "border-border bg-background/80 shadow-[0_10px_40px_rgba(0,0,0,0.28)] backdrop-blur-xl"
-          : "border-transparent bg-background/55 backdrop-blur-md"
+          ? "border-border bg-background/75 shadow-[0_10px_40px_rgba(0,0,0,0.28)] backdrop-blur-xl"
+          : "border-transparent bg-background/15 backdrop-blur-[6px]"
       }`}
     >
-      <div className="mx-auto flex min-h-[4.5rem] max-w-6xl items-center justify-between gap-4 px-6 py-3 sm:px-8 md:min-h-[4.75rem] md:py-3.5 lg:px-10">
+      <div className="mx-auto grid min-h-[4.5rem] max-w-6xl grid-cols-[1fr_auto] items-center gap-4 px-6 py-3 sm:px-8 md:min-h-[4.75rem] md:grid-cols-[1fr_auto_1fr] md:py-3.5 lg:px-10">
         <a
           href="#top"
-          className="shrink-0 text-foreground transition-opacity duration-300 hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          className="justify-self-start text-foreground transition-opacity duration-300 hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           aria-label="SNG Labs home"
         >
           <LogoMark variant="header" priority />
         </a>
 
-        <nav className="hidden items-center gap-0.5 md:flex" aria-label="Primary">
+        <nav
+          className="hidden items-center justify-center gap-0.5 md:flex"
+          aria-label="Primary"
+        >
           {navLinks.map((link) => {
             const isActive = activeHref === link.href;
             return (
@@ -92,7 +95,7 @@ export function SiteHeader() {
           })}
         </nav>
 
-        <div className="hidden md:block">
+        <div className="hidden justify-self-end md:block">
           <ButtonLink
             href={partnerHref}
             variant="premium"
@@ -104,7 +107,7 @@ export function SiteHeader() {
 
         <button
           type="button"
-          className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-border text-foreground transition-[border-color,background-color] duration-300 hover:border-border-strong hover:bg-white/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background md:hidden"
+          className="justify-self-end inline-flex h-10 w-10 items-center justify-center rounded-md border border-border text-foreground transition-[border-color,background-color] duration-300 hover:border-border-strong hover:bg-white/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background md:hidden"
           aria-expanded={open}
           aria-controls="mobile-nav"
           aria-label={open ? "Close menu" : "Open menu"}

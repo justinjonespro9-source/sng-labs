@@ -6,61 +6,81 @@ export function HeroSection() {
   return (
     <section
       id="top"
-      className="relative bg-background px-6 pb-16 pt-12 sm:px-8 sm:pb-20 sm:pt-14 md:pb-24 md:pt-16 lg:px-10 lg:pb-28 lg:pt-20"
+      className="relative w-full overflow-hidden bg-background md:h-[clamp(720px,calc(100svh-4.75rem),900px)]"
     >
-      {/* Mobile: copy above the scene, tight gap */}
-      <div className="relative z-10 mx-auto mb-5 max-w-[1280px] md:hidden">
-        <HeroCopy />
+      {/* Background image — z-0 */}
+      <div className="absolute inset-0 z-0 hidden md:block">
+        <Image
+          src={siteAssets.innovationLabHero}
+          alt="SNG Labs Innovation Lab at night: a garage workspace under an aurora-filled sky, with an Innovation Lab sign, warm interior lighting, desk and computer, ping-pong table, pinball machine, trees, and driveway reflections."
+          fill
+          priority
+          sizes="100vw"
+          className="object-cover object-[58%_50%] lg:object-center"
+        />
       </div>
 
-      <div className="relative mx-auto w-full max-w-[1180px] lg:max-w-[1280px]">
-        <div className="relative overflow-hidden bg-background">
+      {/* Readability gradient — z-10 */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-y-0 left-0 z-10 hidden w-[48%] bg-gradient-to-r from-background/70 via-background/30 to-transparent md:block lg:w-[44%] lg:from-background/65 lg:via-background/22"
+      />
+
+      {/* Hero content — z-20 */}
+      <div className="relative z-20 mx-auto hidden h-full w-full items-center md:flex">
+        <div className="w-full max-w-[40rem] pl-[5vw] pr-6 lg:max-w-[41rem] lg:pl-[6vw] xl:pl-[7vw]">
+          <HeroCopy size="desktop" />
+        </div>
+      </div>
+
+      {/* Mobile: stacked copy + scene */}
+      <div className="relative z-20 md:hidden">
+        <div className="px-6 pb-5 pt-12 sm:px-8">
+          <HeroCopy size="mobile" />
+        </div>
+        <div className="relative z-0 aspect-[16/10] w-full overflow-hidden bg-background sm:aspect-[16/9]">
           <Image
             src={siteAssets.innovationLabHero}
-            alt="SNG Labs Innovation Lab at night: an open garage workspace under an aurora-filled sky, with a glowing Innovation Lab sign, warm interior lighting, desk and computer, ping-pong table, pinball machine, and driveway reflections."
-            width={1920}
-            height={1080}
+            alt="SNG Labs Innovation Lab at night: a garage workspace under an aurora-filled sky, with an Innovation Lab sign, warm interior lighting, desk and computer, ping-pong table, pinball machine, trees, and driveway reflections."
+            fill
             priority
-            sizes="(max-width: 768px) 100vw, (max-width: 1280px) 1180px, 1280px"
-            className="mx-auto h-auto max-h-[320px] w-full object-contain object-center sm:max-h-[360px] md:max-h-[min(560px,76vh)] lg:max-h-[min(680px,76vh)]"
+            sizes="100vw"
+            className="object-cover object-[62%_50%]"
           />
-
-          {/* Soft overlays — desktop/tablet only */}
-          <div
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-0 hidden md:block"
-          >
-            <div className="absolute inset-y-0 left-0 w-[48%] bg-gradient-to-r from-background/80 via-background/45 to-transparent lg:w-[42%] lg:from-background/72 lg:via-background/35" />
-            <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-background via-background/45 to-transparent lg:h-20" />
-          </div>
-
-          {/* Desktop / tablet: live copy over left sky */}
-          <div className="pointer-events-none absolute inset-0 hidden items-center md:flex">
-            <div className="pointer-events-auto w-full px-6 sm:px-8 lg:px-10">
-              <div className="max-w-[17rem] lg:max-w-[20rem] xl:max-w-[22rem]">
-                <HeroCopy />
-              </div>
-            </div>
-          </div>
         </div>
       </div>
     </section>
   );
 }
 
-function HeroCopy() {
+function HeroCopy({ size }: { size: "desktop" | "mobile" }) {
+  const headline =
+    size === "desktop"
+      ? "font-display font-semibold tracking-tight text-foreground text-[clamp(3.75rem,5.4vw,5.75rem)] leading-[1.02]"
+      : "font-display text-[2rem] font-semibold leading-[1.06] tracking-tight text-foreground sm:text-4xl";
+
   return (
     <>
-      <h1 className="animate-fade-up font-display text-[2rem] font-semibold tracking-tight text-foreground sm:text-4xl md:text-[2.35rem] md:leading-[1.06] lg:text-[2.85rem] xl:text-[3.15rem] xl:leading-[1.04]">
+      <h1 className={`animate-fade-up ${headline}`}>
         <span className="block">Transforming Fans</span>
         <span className="mt-1 block sm:mt-1.5">from Spectators</span>
         <span className="mt-1 block sm:mt-1.5">into Participants.</span>
       </h1>
-      <p className="animate-fade-up-delay-1 mt-5 max-w-[28ch] text-base leading-relaxed text-muted-strong sm:mt-6 sm:text-lg md:mt-6 md:max-w-[24ch] md:text-[0.95rem] lg:text-base">
+      <p
+        className={`animate-fade-up-delay-1 max-w-[38rem] leading-relaxed text-muted-strong ${
+          size === "desktop"
+            ? "mt-7 text-lg lg:mt-8 lg:text-xl"
+            : "mt-5 text-base sm:mt-6 sm:text-lg"
+        }`}
+      >
         We create original platforms that give sports fans new ways to compete,
         connect, contribute, and be recognized.
       </p>
-      <div className="animate-fade-up-delay-2 mt-7 flex flex-col gap-3 sm:mt-8 sm:flex-row sm:items-center md:mt-8">
+      <div
+        className={`animate-fade-up-delay-2 flex flex-col gap-3 sm:flex-row sm:items-center ${
+          size === "desktop" ? "mt-9 lg:mt-10" : "mt-7 sm:mt-8"
+        }`}
+      >
         <ButtonLink href="#products">Explore the Portfolio</ButtonLink>
         <ButtonLink href={partnerHref} variant="secondary">
           Partner With Us
