@@ -12,9 +12,9 @@ export function SiteFooter() {
               className="inline-flex text-foreground transition-opacity duration-300 hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
               aria-label="SNG Labs home"
             >
-              <LogoMark height={32} />
+              <LogoMark variant="footer" />
             </a>
-            <p className="mt-6 text-sm leading-relaxed text-muted">
+            <p className="mt-5 text-sm leading-relaxed text-muted md:mt-6">
               {company.tagline}
             </p>
           </div>

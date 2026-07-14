@@ -63,16 +63,16 @@ export function SiteHeader() {
           : "border-transparent bg-background/30 backdrop-blur-md"
       }`}
     >
-      <div className="mx-auto flex h-[4.25rem] max-w-6xl items-center justify-between px-6 sm:px-8 lg:px-10">
+      <div className="mx-auto flex min-h-[4.5rem] max-w-6xl items-center justify-between gap-4 px-6 py-3 sm:px-8 md:min-h-[4.75rem] md:py-3.5 lg:px-10">
         <a
           href="#top"
-          className="text-foreground transition-opacity duration-300 hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          className="shrink-0 text-foreground transition-opacity duration-300 hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           aria-label="SNG Labs home"
         >
-          <LogoMark height={30} priority />
+          <LogoMark variant="header" priority />
         </a>
 
-        <nav className="hidden items-center gap-1 md:flex" aria-label="Primary">
+        <nav className="hidden items-center gap-0.5 md:flex" aria-label="Primary">
           {navLinks.map((link) => {
             const isActive = activeHref === link.href;
             return (
@@ -80,7 +80,7 @@ export function SiteHeader() {
                 key={link.href}
                 href={link.href}
                 aria-current={isActive ? "true" : undefined}
-                className={`relative rounded-md px-3.5 py-2 text-sm transition-colors duration-300 after:absolute after:inset-x-3.5 after:-bottom-0.5 after:h-px after:origin-left after:transition-transform after:duration-300 after:ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background ${
+                className={`relative rounded-md px-3.5 py-2 text-sm leading-none transition-colors duration-300 after:absolute after:inset-x-3.5 after:-bottom-0.5 after:h-px after:origin-left after:transition-transform after:duration-300 after:ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background ${
                   isActive
                     ? "text-foreground after:scale-x-100 after:bg-accent"
                     : "text-muted-strong after:scale-x-0 after:bg-foreground/45 hover:text-foreground hover:after:scale-x-100"

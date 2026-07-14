@@ -27,7 +27,7 @@
   --color-accent-soft: var(--accent-soft);
   --color-ring: var(--ring);
   --font-sans: var(--font-geist-sans);
-  --font-display: var(--font-syne);
+  --font-display: var(--font-outfit);
   --font-mono: var(--font-geist-mono);
 }
 
@@ -76,18 +76,6 @@ body {
   }
 }
 
-@keyframes orbit-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@keyframes orbit-spin-reverse {
-  to {
-    transform: rotate(-360deg);
-  }
-}
-
 @keyframes node-pulse {
   0%,
   100% {
@@ -120,16 +108,6 @@ body {
   }
   100% {
     background-position: -200% 0;
-  }
-}
-
-@keyframes glow-breathe {
-  0%,
-  100% {
-    opacity: 0.35;
-  }
-  50% {
-    opacity: 0.7;
   }
 }
 
@@ -179,14 +157,6 @@ body {
   animation: line-shimmer 9s linear infinite;
 }
 
-.orbit-ring {
-  animation: orbit-spin 48s linear infinite;
-}
-
-.orbit-ring-reverse {
-  animation: orbit-spin-reverse 36s linear infinite;
-}
-
 .node-pulse {
   animation: node-pulse 4.5s ease-in-out infinite;
 }
@@ -194,8 +164,4 @@ body {
 .signal-path {
   stroke-dasharray: 8 10;
   animation: signal-travel 3.8s ease-in-out infinite;
-}
-
-.lab-glow {
-  animation: glow-breathe 7s ease-in-out infinite;
 }

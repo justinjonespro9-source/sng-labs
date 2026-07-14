@@ -21,7 +21,7 @@ export function Section({
   return (
     <section
       id={id}
-      className={`scroll-mt-24 px-6 py-28 sm:px-8 lg:px-10 lg:py-36 ${className}`}
+      className={`scroll-mt-28 px-6 py-28 sm:px-8 md:scroll-mt-32 lg:px-10 lg:py-36 ${className}`}
     >
       <div className="divider-line mx-auto mb-28 h-px max-w-6xl" aria-hidden="true" />
       <Reveal>

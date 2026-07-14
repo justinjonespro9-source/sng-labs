@@ -1,7 +1,6 @@
 import { AboutSection } from "@/components/sections/about";
 import { ContactSection } from "@/components/sections/contact";
 import { HeroSection } from "@/components/sections/hero";
-import { InnovationLabSection } from "@/components/sections/innovation-lab";
 import { InnovationSection } from "@/components/sections/innovation";
 import { IntellectualPropertySection } from "@/components/sections/intellectual-property";
 import { PartnershipSection } from "@/components/sections/partnership";
@@ -23,7 +22,6 @@ export default function Home() {
         <InnovationSection />
         <IntellectualPropertySection />
         <PartnershipSection />
-        <InnovationLabSection />
         <AboutSection />
         <ContactSection />
       </main>
