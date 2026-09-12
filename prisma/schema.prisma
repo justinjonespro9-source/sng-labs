@@ -1,0 +1,390 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  OWNER
+  ADMIN
+  EDITOR
+  VIEWER
+}
+
+enum BrandKind {
+  CORPORATE
+  PRODUCT
+}
+
+enum SocialPlatform {
+  X
+  INSTAGRAM
+  FACEBOOK
+  LINKEDIN
+  TIKTOK
+  YOUTUBE
+  THREADS
+  OTHER
+}
+
+enum ConnectionStatus {
+  NOT_CONNECTED
+  CONNECTED
+  NEEDS_ATTENTION
+  DISABLED
+}
+
+enum PublishingMode {
+  MANUAL
+  ASSISTED
+  SELECTIVE_AUTOPILOT
+}
+
+enum OpportunityStatus {
+  NEW
+  REVIEWED
+  DEVELOPING
+  QUEUED
+  COMPLETE
+  NO_POST
+  DISMISSED
+}
+
+enum DraftStatus {
+  DRAFT
+  NEEDS_REVIEW
+  REVISION_REQUESTED
+  APPROVED
+  READY
+  PUBLISHED
+  REJECTED
+}
+
+enum ApprovalDecision {
+  APPROVED
+  REVISION_REQUESTED
+  REJECTED
+}
+
+enum PublicationStatus {
+  PLANNED
+  READY
+  PUBLISHED
+  FAILED
+  CANCELLED
+}
+
+enum HealthState {
+  HEALTHY
+  WATCH
+  RECOVERY
+}
+
+enum JobStatus {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+}
+
+model User {
+  id            String       @id @default(cuid())
+  name          String?
+  email         String?      @unique
+  emailVerified DateTime?
+  image         String?
+  role          UserRole     @default(VIEWER)
+  accounts      Account[]
+  sessions      Session[]
+  approvals     Approval[]
+  auditEvents   AuditEvent[]
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Brand {
+  id                  String           @id @default(cuid())
+  key                 String           @unique
+  name                String
+  kind                BrandKind
+  description         String
+  audience            String
+  voice               String
+  objectives          String[]
+  preferredContent    String[]
+  prohibitedContent   String[]
+  callToActionRules   String
+  visualDirection     String
+  defaultCadenceNotes String
+  active              Boolean          @default(true)
+  socialAccounts      SocialAccount[]
+  angles              BrandAngle[]
+  metricSnapshots     MetricSnapshot[]
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+}
+
+model SocialAccount {
+  id               String                  @id @default(cuid())
+  brandId          String
+  platform         SocialPlatform
+  handle           String?
+  profileUrl       String?
+  connectionStatus ConnectionStatus        @default(NOT_CONNECTED)
+  publishingMode   PublishingMode          @default(MANUAL)
+  cadenceRules     Json?
+  platformRules    Json?
+  autopilotAllowed Boolean                 @default(false)
+  currentHealth    HealthState             @default(HEALTHY)
+  brand            Brand                   @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  drafts           ContentDraft[]
+  publications     Publication[]
+  metricSnapshots  MetricSnapshot[]
+  healthSnapshots  AccountHealthSnapshot[]
+  createdAt        DateTime                @default(now())
+  updatedAt        DateTime                @updatedAt
+
+  @@unique([brandId, platform])
+  @@index([platform, connectionStatus])
+}
+
+model SourceEvent {
+  id              String        @id @default(cuid())
+  externalEventId String
+  sourceProduct   String
+  eventType       String
+  occurredAt      DateTime
+  receivedAt      DateTime      @default(now())
+  headline        String
+  facts           Json
+  publicUrl       String?
+  significance    Int?
+  expiresAt       DateTime?
+  schemaVersion   Int           @default(1)
+  opportunities   Opportunity[]
+
+  @@unique([sourceProduct, externalEventId])
+  @@index([occurredAt])
+}
+
+model Opportunity {
+  id              String                @id @default(cuid())
+  sourceEventId   String?
+  title           String
+  summary         String
+  status          OpportunityStatus     @default(NEW)
+  urgency         Int                   @default(0)
+  confidence      Float?
+  recommendedAt   DateTime?
+  expiresAt       DateTime?
+  noPostRationale String?
+  sourceEvent     SourceEvent?          @relation(fields: [sourceEventId], references: [id], onDelete: SetNull)
+  angles          BrandAngle[]
+  campaigns       CampaignOpportunity[]
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  @@index([status, recommendedAt])
+}
+
+model BrandAngle {
+  id              String         @id @default(cuid())
+  opportunityId   String
+  brandId         String
+  objective       String
+  hook            String
+  rationale       String
+  suggestedVisual String?
+  timingNotes     String?
+  riskNotes       String?
+  similarityRisk  Float?
+  opportunity     Opportunity    @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  brand           Brand          @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  drafts          ContentDraft[]
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@unique([opportunityId, brandId])
+}
+
+model ContentDraft {
+  id              String         @id @default(cuid())
+  brandAngleId    String
+  socialAccountId String?
+  status          DraftStatus    @default(DRAFT)
+  body            String         @db.Text
+  visualBrief     String?        @db.Text
+  callToAction    String?
+  modelProvider   String?
+  modelName       String?
+  promptVersion   String?
+  sourceFacts     Json?
+  aiConfidence    Float?
+  scheduledFor    DateTime?
+  brandAngle      BrandAngle     @relation(fields: [brandAngleId], references: [id], onDelete: Cascade)
+  socialAccount   SocialAccount? @relation(fields: [socialAccountId], references: [id], onDelete: SetNull)
+  approvals       Approval[]
+  publication     Publication?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@index([status, scheduledFor])
+}
+
+model Approval {
+  id         String           @id @default(cuid())
+  draftId    String
+  reviewerId String
+  decision   ApprovalDecision
+  comment    String?
+  draft      ContentDraft     @relation(fields: [draftId], references: [id], onDelete: Cascade)
+  reviewer   User             @relation(fields: [reviewerId], references: [id], onDelete: Restrict)
+  createdAt  DateTime         @default(now())
+
+  @@index([draftId, createdAt])
+}
+
+model Publication {
+  id              String            @id @default(cuid())
+  draftId         String            @unique
+  socialAccountId String
+  status          PublicationStatus @default(PLANNED)
+  scheduledFor    DateTime?
+  publishedAt     DateTime?
+  platformPostId  String?
+  platformUrl     String?
+  failureReason   String?
+  draft           ContentDraft      @relation(fields: [draftId], references: [id], onDelete: Cascade)
+  socialAccount   SocialAccount     @relation(fields: [socialAccountId], references: [id], onDelete: Restrict)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+}
+
+model Campaign {
+  id            String                @id @default(cuid())
+  name          String
+  description   String?
+  startsAt      DateTime?
+  endsAt        DateTime?
+  active        Boolean               @default(true)
+  opportunities CampaignOpportunity[]
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+}
+
+model CampaignOpportunity {
+  campaignId    String
+  opportunityId String
+  campaign      Campaign    @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  opportunity   Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+
+  @@id([campaignId, opportunityId])
+}
+
+model MetricSnapshot {
+  id               String        @id @default(cuid())
+  brandId          String
+  socialAccountId  String
+  capturedAt       DateTime
+  periodStart      DateTime
+  periodEnd        DateTime
+  followers        Int?
+  impressions      Int?
+  reach            Int?
+  followerReach    Int?
+  nonFollowerReach Int?
+  engagements      Int?
+  postsPublished   Int?
+  rawMetrics       Json?
+  brand            Brand         @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  socialAccount    SocialAccount @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
+
+  @@unique([socialAccountId, capturedAt, periodStart, periodEnd])
+  @@index([brandId, capturedAt])
+}
+
+model AccountHealthSnapshot {
+  id                     String        @id @default(cuid())
+  socialAccountId        String
+  state                  HealthState
+  score                  Int?
+  reachTrendPercent      Float?
+  engagementTrendPercent Float?
+  nonFollowerShare       Float?
+  cadenceVariance        Float?
+  reasons                String[]
+  recommendedActions     String[]
+  calculatedAt           DateTime      @default(now())
+  socialAccount          SocialAccount @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
+
+  @@index([socialAccountId, calculatedAt])
+}
+
+model Job {
+  id          String    @id @default(cuid())
+  type        String
+  status      JobStatus @default(PENDING)
+  payload     Json
+  attempts    Int       @default(0)
+  maxAttempts Int       @default(3)
+  runAfter    DateTime  @default(now())
+  lockedAt    DateTime?
+  completedAt DateTime?
+  lastError   String?   @db.Text
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([status, runAfter])
+}
+
+model AuditEvent {
+  id         String   @id @default(cuid())
+  actorId    String?
+  action     String
+  entityType String
+  entityId   String?
+  metadata   Json?
+  actor      User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  createdAt  DateTime @default(now())
+
+  @@index([entityType, entityId, createdAt])
+  @@index([actorId, createdAt])
+}

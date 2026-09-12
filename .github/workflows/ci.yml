@@ -1,0 +1,29 @@
+name: Verify
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      DATABASE_URL: postgresql://user:pass@localhost:5432/sng
+      AUTH_SECRET: ci-only-secret-not-used-in-production
+      AUTH_GOOGLE_ID: ci-client-id
+      AUTH_GOOGLE_SECRET: ci-client-secret
+      AUTH_ALLOWED_EMAILS: ci-owner@example.com
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run db:generate
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
