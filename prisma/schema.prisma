@@ -91,19 +91,71 @@ enum JobStatus {
   CANCELLED
 }
 
+enum CampaignStatus {
+  PLANNING
+  ACTIVE
+  PAUSED
+  COMPLETE
+  ARCHIVED
+}
+
+enum OrganizationType {
+  MEDIA
+  TEAM
+  CREATOR_NETWORK
+  CREATOR
+  PODCAST
+  VENUE
+  PARTNER
+  AGENCY
+  INVESTOR
+  OTHER
+}
+
+enum RelationshipStage {
+  PROSPECT
+  CONTACTED
+  CONVERSATION
+  OPPORTUNITY
+  PARTNER
+  CLOSED
+  NOT_PURSUING
+}
+
+enum ActivityType {
+  EMAIL
+  DM
+  CALL
+  MEETING
+  NOTE
+  FOLLOW_UP
+  OTHER
+}
+
+enum GrowthEventType {
+  GAME
+  LAUNCH
+  LIVE_EVENT
+  DEADLINE
+  MEDIA_MOMENT
+  CAMPAIGN_MILESTONE
+  OTHER
+}
+
 model User {
-  id            String       @id @default(cuid())
+  id            String         @id @default(cuid())
   name          String?
-  email         String?      @unique
+  email         String?        @unique
   emailVerified DateTime?
   image         String?
-  role          UserRole     @default(VIEWER)
+  role          UserRole       @default(VIEWER)
   accounts      Account[]
   sessions      Session[]
   approvals     Approval[]
   auditEvents   AuditEvent[]
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
+  relationships Relationship[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
 }
 
 model Account {
@@ -148,6 +200,9 @@ model Brand {
   description         String
   audience            String
   voice               String
+  primaryCtas         String[]         @default([])
+  relevantUrls        String[]         @default([])
+  terminology         Json?
   objectives          String[]
   preferredContent    String[]
   prohibitedContent   String[]
@@ -158,6 +213,10 @@ model Brand {
   socialAccounts      SocialAccount[]
   angles              BrandAngle[]
   metricSnapshots     MetricSnapshot[]
+  teams               Team[]           @relation("BrandTeams")
+  campaigns           Campaign[]       @relation("BrandCampaigns")
+  organizations       Organization[]   @relation("BrandOrganizations")
+  relationships       Relationship[]   @relation("BrandRelationships")
   createdAt           DateTime         @default(now())
   updatedAt           DateTime         @updatedAt
 }
@@ -206,21 +265,25 @@ model SourceEvent {
 }
 
 model Opportunity {
-  id              String                @id @default(cuid())
-  sourceEventId   String?
-  title           String
-  summary         String
-  status          OpportunityStatus     @default(NEW)
-  urgency         Int                   @default(0)
-  confidence      Float?
-  recommendedAt   DateTime?
-  expiresAt       DateTime?
-  noPostRationale String?
-  sourceEvent     SourceEvent?          @relation(fields: [sourceEventId], references: [id], onDelete: SetNull)
-  angles          BrandAngle[]
-  campaigns       CampaignOpportunity[]
-  createdAt       DateTime              @default(now())
-  updatedAt       DateTime              @updatedAt
+  id                   String                @id @default(cuid())
+  sourceEventId        String?
+  title                String
+  summary              String
+  status               OpportunityStatus     @default(NEW)
+  urgency              Int                   @default(0)
+  confidence           Float?
+  recommendedAt        DateTime?
+  expiresAt            DateTime?
+  noPostRationale      String?
+  actionRecommendation String?
+  sourceLabel          String?
+  sourceEvent          SourceEvent?          @relation(fields: [sourceEventId], references: [id], onDelete: SetNull)
+  angles               BrandAngle[]
+  campaigns            CampaignOpportunity[]
+  markets              Market[]              @relation("MarketOpportunities")
+  teams                Team[]                @relation("TeamOpportunities")
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
 
   @@index([status, recommendedAt])
 }
@@ -299,15 +362,179 @@ model Publication {
 }
 
 model Campaign {
-  id            String                @id @default(cuid())
+  id            String                 @id @default(cuid())
   name          String
   description   String?
+  objective     String?
+  status        CampaignStatus         @default(PLANNING)
   startsAt      DateTime?
   endsAt        DateTime?
-  active        Boolean               @default(true)
+  active        Boolean                @default(true)
   opportunities CampaignOpportunity[]
-  createdAt     DateTime              @default(now())
-  updatedAt     DateTime              @updatedAt
+  brands        Brand[]                @relation("BrandCampaigns")
+  markets       Market[]               @relation("MarketCampaigns")
+  teams         Team[]                 @relation("TeamCampaigns")
+  events        GrowthEvent[]          @relation("CampaignEvents")
+  organizations Organization[]         @relation("CampaignOrganizations")
+  relationships Relationship[]
+  activities    RelationshipActivity[]
+  attribution   CampaignAttribution[]
+  createdAt     DateTime               @default(now())
+  updatedAt     DateTime               @updatedAt
+}
+
+model Market {
+  id            String         @id @default(cuid())
+  key           String         @unique
+  name          String
+  region        String?
+  country       String         @default("US")
+  notes         String?
+  active        Boolean        @default(true)
+  teams         Team[]
+  organizations Organization[]
+  events        GrowthEvent[]
+  campaigns     Campaign[]     @relation("MarketCampaigns")
+  opportunities Opportunity[]  @relation("MarketOpportunities")
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+}
+
+model Team {
+  id            String         @id @default(cuid())
+  key           String         @unique
+  name          String
+  marketId      String
+  sport         String
+  league        String
+  venueName     String?
+  websiteUrl    String?
+  notes         String?
+  active        Boolean        @default(true)
+  market        Market         @relation(fields: [marketId], references: [id], onDelete: Restrict)
+  brands        Brand[]        @relation("BrandTeams")
+  campaigns     Campaign[]     @relation("TeamCampaigns")
+  organizations Organization[] @relation("OrganizationTeams")
+  opportunities Opportunity[]  @relation("TeamOpportunities")
+  events        GrowthEvent[]  @relation("TeamEvents")
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@index([marketId, league])
+}
+
+model GrowthEvent {
+  id          String          @id @default(cuid())
+  name        String
+  type        GrowthEventType
+  description String?
+  startsAt    DateTime
+  endsAt      DateTime?
+  venueName   String?
+  publicUrl   String?
+  marketId    String?
+  market      Market?         @relation(fields: [marketId], references: [id], onDelete: SetNull)
+  teams       Team[]          @relation("TeamEvents")
+  campaigns   Campaign[]      @relation("CampaignEvents")
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@index([startsAt, type])
+}
+
+model Organization {
+  id             String           @id @default(cuid())
+  name           String           @unique
+  type           OrganizationType
+  marketId       String?
+  websiteUrl     String?
+  notes          String?
+  market         Market?          @relation(fields: [marketId], references: [id], onDelete: SetNull)
+  teams          Team[]           @relation("OrganizationTeams")
+  relevantBrands Brand[]          @relation("BrandOrganizations")
+  campaigns      Campaign[]       @relation("CampaignOrganizations")
+  contacts       Contact[]
+  relationships  Relationship[]
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  @@index([marketId, type])
+}
+
+model Contact {
+  id             String                 @id @default(cuid())
+  name           String
+  title          String?
+  organizationId String?
+  email          String?
+  socialHandle   String?
+  profileUrl     String?
+  notes          String?
+  organization   Organization?          @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  relationships  Relationship[]
+  activities     RelationshipActivity[]
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+
+  @@index([organizationId, name])
+}
+
+model Relationship {
+  id             String                 @id @default(cuid())
+  name           String
+  stage          RelationshipStage      @default(PROSPECT)
+  organizationId String
+  contactId      String?
+  ownerId        String?
+  campaignId     String?
+  summary        String?
+  lastOutreachAt DateTime?
+  nextFollowUpAt DateTime?
+  organization   Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  contact        Contact?               @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  owner          User?                  @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+  campaign       Campaign?              @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  relevantBrands Brand[]                @relation("BrandRelationships")
+  activities     RelationshipActivity[]
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+
+  @@index([stage, nextFollowUpAt])
+  @@index([organizationId, updatedAt])
+}
+
+model RelationshipActivity {
+  id             String       @id @default(cuid())
+  relationshipId String
+  contactId      String?
+  campaignId     String?
+  type           ActivityType
+  occurredAt     DateTime     @default(now())
+  summary        String
+  nextStep       String?
+  relationship   Relationship @relation(fields: [relationshipId], references: [id], onDelete: Cascade)
+  contact        Contact?     @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  campaign       Campaign?    @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  createdAt      DateTime     @default(now())
+
+  @@index([relationshipId, occurredAt])
+}
+
+model CampaignAttribution {
+  id             String   @id @default(cuid())
+  campaignId     String
+  capturedAt     DateTime @default(now())
+  source         String?
+  medium         String?
+  campaignCode   String?
+  visits         Int      @default(0)
+  signups        Int      @default(0)
+  conversions    Int      @default(0)
+  productActions Json?
+  notes          String?
+  campaign       Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@index([campaignId, capturedAt])
 }
 
 model CampaignOpportunity {

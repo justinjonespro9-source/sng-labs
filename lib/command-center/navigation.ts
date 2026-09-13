@@ -4,7 +4,9 @@ export const commandCenterNavigation = [
   { href: "/command-center/queue", label: "Content Queue", key: "queue" },
   { href: "/command-center/calendar", label: "Calendar", key: "calendar" },
   { href: "/command-center/brands", label: "Brands", key: "brands" },
+  { href: "/command-center/markets", label: "Markets & Teams", key: "markets" },
   { href: "/command-center/campaigns", label: "Campaigns", key: "campaigns" },
+  { href: "/command-center/relationships", label: "Relationships", key: "relationships" },
   { href: "/command-center/live-desk", label: "Live Desk", key: "live-desk" },
   { href: "/command-center/engagement", label: "Engagement", key: "engagement" },
   { href: "/command-center/analytics", label: "Analytics", key: "analytics" },
@@ -13,5 +15,5 @@ export const commandCenterNavigation = [
 ] as const;
 
 export const scaffoldSections = commandCenterNavigation.filter(
-  (item) => !["overview", "brands"].includes(item.key),
+  (item) => !["overview", "opportunities", "brands", "markets", "campaigns", "relationships"].includes(item.key),
 );

@@ -1,0 +1,15 @@
+import { CheckboxGroup, Field, SubmitButton, TextArea } from "@/components/command-center/form-fields";
+import { PageHeader } from "@/components/command-center/page-header";
+import { createOpportunity } from "@/lib/command-center/actions";
+import { prisma } from "@/lib/prisma";
+
+export default async function OpportunitiesPage() {
+  const [opportunities, markets, teams, campaigns] = await Promise.all([
+    prisma.opportunity.findMany({ include: { markets: true, teams: true, campaigns: { include: { campaign: true } } }, orderBy: [{ urgency: "desc" }, { createdAt: "desc" }], take: 50 }),
+    prisma.market.findMany({ orderBy: { name: "asc" } }), prisma.team.findMany({ orderBy: { name: "asc" } }), prisma.campaign.findMany({ orderBy: { name: "asc" } }),
+  ]);
+  return <div><PageHeader title="Opportunity Feed" description="One prioritized feed for signals across SNG, with distinct editorial angles by brand." />
+    <section className="mt-8 space-y-4">{opportunities.length ? opportunities.map((item) => <article key={item.id} className="rounded-2xl border border-white/8 bg-[#101214] p-6"><div className="flex items-start justify-between gap-5"><div><p className="text-[10px] uppercase tracking-[.15em] text-[#7f8381]">{item.sourceLabel || "Manual signal"}</p><h2 className="mt-2 font-display text-xl text-white">{item.title}</h2></div><span className="rounded-full border border-white/10 px-3 py-1 text-xs text-[#b8d4c8]">Urgency {item.urgency}</span></div><p className="mt-3 text-sm leading-6 text-[#9ba09d]">{item.summary}</p>{item.actionRecommendation && <div className="mt-4 rounded-xl bg-[#b8d4c8]/7 p-4 text-sm text-[#c7d9d1]"><b>Recommended today: </b>{item.actionRecommendation}</div>}<p className="mt-4 text-xs text-[#747976]">{[...item.markets.map((x) => x.name), ...item.teams.map((x) => x.name), ...item.campaigns.map((x) => x.campaign.name)].join(" · ") || "Portfolio-wide"}</p></article>) : <p className="rounded-2xl border border-dashed border-white/10 p-12 text-center text-sm text-[#8f9391]">No opportunities yet. Add the first signal below.</p>}</section>
+    <form action={createOpportunity} className="mt-8 space-y-4 rounded-2xl border border-white/8 bg-[#101214] p-6"><h2 className="font-display text-lg text-white">Add opportunity</h2><Field label="Title" name="title" required /><TextArea label="What is happening?" name="summary" rows={3} required /><TextArea label="What should SNG do today?" name="actionRecommendation" rows={2} /><div className="grid gap-4 sm:grid-cols-3"><Field label="Source" name="sourceLabel" /><Field label="Urgency" name="urgency" type="number" min="0" max="100" defaultValue="50" /><Field label="Recommended by" name="recommendedAt" type="datetime-local" /></div><p className="text-xs text-[#747976]">Markets</p><CheckboxGroup name="marketIds" items={markets} /><p className="text-xs text-[#747976]">Teams</p><CheckboxGroup name="teamIds" items={teams} /><p className="text-xs text-[#747976]">Campaigns</p><CheckboxGroup name="campaignIds" items={campaigns} /><SubmitButton>Add opportunity</SubmitButton></form>
+  </div>;
+}

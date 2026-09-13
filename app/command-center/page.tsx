@@ -1,15 +1,23 @@
 import Link from "next/link";
 import { PageHeader } from "@/components/command-center/page-header";
 import { brandDefinitions } from "@/lib/command-center/brand-definitions";
+import { prisma } from "@/lib/prisma";
 
-const summaryCards = [
-  { label: "Open opportunities", value: "—", detail: "Awaiting the first source event" },
-  { label: "Needs approval", value: "—", detail: "Human approval remains required" },
-  { label: "Scheduled", value: "—", detail: "No publications scheduled" },
-  { label: "Accounts on watch", value: "—", detail: "Metrics integrations not connected" },
-];
-
-export default function CommandCenterOverviewPage() {
+export default async function CommandCenterOverviewPage() {
+  const [open, approvals, scheduled, watch, recent, followUps] = await Promise.all([
+    prisma.opportunity.count({ where: { status: { in: ["NEW", "REVIEWED", "DEVELOPING", "QUEUED"] } } }),
+    prisma.contentDraft.count({ where: { status: "NEEDS_REVIEW" } }),
+    prisma.publication.count({ where: { status: { in: ["PLANNED", "READY"] } } }),
+    prisma.accountHealthSnapshot.count({ where: { state: { in: ["WATCH", "RECOVERY"] } } }),
+    prisma.opportunity.findMany({ orderBy: [{ urgency: "desc" }, { createdAt: "desc" }], take: 4 }),
+    prisma.relationship.count({ where: { nextFollowUpAt: { lte: new Date() }, stage: { notIn: ["CLOSED", "NOT_PURSUING"] } } }),
+  ]);
+  const summaryCards = [
+    { label: "Open opportunities", value: String(open), detail: "Signals needing a decision" },
+    { label: "Needs approval", value: String(approvals), detail: "Human approval remains required" },
+    { label: "Scheduled", value: String(scheduled), detail: "Approved publications queued" },
+    { label: "Accounts on watch", value: String(watch), detail: "Health may limit distribution" },
+  ];
   return (
     <div>
       <PageHeader
@@ -39,14 +47,9 @@ export default function CommandCenterOverviewPage() {
               <h2 className="font-display text-lg font-semibold text-white">Opportunity feed</h2>
               <p className="mt-1 text-xs text-[#7f8381]">Unified signals, distinct editorial angles.</p>
             </div>
-            <span className="rounded-full border border-white/8 px-2.5 py-1 text-[10px] uppercase tracking-[0.16em] text-[#7f8381]">Foundation</span>
+            <Link href="/command-center/opportunities" className="text-xs text-[#b8d4c8]">Open feed →</Link>
           </div>
-          <div className="mt-10 rounded-xl border border-dashed border-white/10 px-6 py-12 text-center">
-            <p className="text-sm font-medium text-[#c7cac8]">Ready for the first opportunity</p>
-            <p className="mx-auto mt-2 max-w-md text-xs leading-5 text-[#727674]">
-              Manual entry and RankEyeQ ingestion arrive in the next phase. A source event may create several brand angles, never duplicate cross-posts.
-            </p>
-          </div>
+          <div className="mt-6 space-y-3">{recent.length ? recent.map((item) => <div key={item.id} className="rounded-xl border border-white/7 bg-white/[.02] p-4"><div className="flex justify-between gap-4"><p className="text-sm font-medium text-white">{item.title}</p><span className="text-xs text-[#b8d4c8]">{item.urgency}</span></div><p className="mt-2 line-clamp-2 text-xs leading-5 text-[#727674]">{item.summary}</p></div>) : <div className="rounded-xl border border-dashed border-white/10 px-6 py-10 text-center text-sm text-[#8f9391]">Ready for the first opportunity.</div>}</div>
         </article>
 
         <article className="rounded-2xl border border-white/8 bg-[#101214] p-6">
@@ -69,6 +72,8 @@ export default function CommandCenterOverviewPage() {
           </div>
         </article>
       </section>
+
+      <section className="mt-8 rounded-2xl border border-white/8 bg-[#101214] p-6"><div className="flex items-center justify-between gap-4"><div><h2 className="font-display text-lg font-semibold text-white">Relationship follow-ups</h2><p className="mt-1 text-xs text-[#7f8381]">{followUps} due or overdue</p></div><Link href="/command-center/relationships" className="text-xs text-[#b8d4c8]">Open pipeline →</Link></div></section>
 
       <section className="mt-8 rounded-2xl border border-white/8 bg-[#101214] p-6">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
