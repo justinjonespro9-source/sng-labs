@@ -1,0 +1,17 @@
+import { CheckboxGroup, Field, Select, SubmitButton, TextArea } from "@/components/command-center/form-fields";
+import { PageHeader } from "@/components/command-center/page-header";
+import { createOrganization, createRelationship } from "@/lib/command-center/actions";
+import { prisma } from "@/lib/prisma";
+
+const types = ["MEDIA", "TEAM", "CREATOR_NETWORK", "CREATOR", "PODCAST", "VENUE", "PARTNER", "AGENCY", "INVESTOR", "OTHER"];
+export default async function RelationshipsPage() {
+  const [relationships, organizations, markets, brands] = await Promise.all([
+    prisma.relationship.findMany({ include: { organization: true, contact: true, owner: true }, orderBy: [{ nextFollowUpAt: "asc" }, { updatedAt: "desc" }] }),
+    prisma.organization.findMany({ orderBy: { name: "asc" } }), prisma.market.findMany({ orderBy: { name: "asc" } }), prisma.brand.findMany({ orderBy: { name: "asc" } }),
+  ]);
+  return <div><PageHeader title="Relationships" description="A focused pipeline for media, creators, teams, venues, and distribution partners." />
+    <section className="mt-8 grid gap-4 xl:grid-cols-2">{relationships.length ? relationships.map((item) => <article key={item.id} className="rounded-2xl border border-white/8 bg-[#101214] p-6"><div className="flex justify-between gap-4"><div><p className="text-xs text-[#7f8381]">{item.organization.name}</p><h2 className="mt-1 font-display text-xl text-white">{item.name}</h2></div><span className="text-[10px] uppercase tracking-[.14em] text-[#b8d4c8]">{item.stage.replaceAll("_", " ")}</span></div><p className="mt-3 text-sm text-[#8f9391]">{item.contact ? `${item.contact.name}${item.contact.title ? ` · ${item.contact.title}` : ""}` : "Contact not set"}</p><p className="mt-4 text-xs text-[#747976]">Owner: {item.owner?.name || item.owner?.email || "Unassigned"} · Next: {item.nextFollowUpAt?.toLocaleDateString() || "Not scheduled"}</p></article>) : <p className="text-sm text-[#8f9391]">No active relationships yet.</p>}</section>
+    <section className="mt-8 grid gap-6 xl:grid-cols-2"><form action={createOrganization} className="space-y-4 rounded-2xl border border-white/8 bg-[#101214] p-6"><h2 className="font-display text-lg text-white">Add organization</h2><Field label="Name" name="name" required /><Select label="Type" name="type">{types.map((type) => <option key={type}>{type}</option>)}</Select><Select label="Market" name="marketId"><option value="">None</option>{markets.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</Select><Field label="Website" name="websiteUrl" type="url" /><TextArea label="Notes" name="notes" /><CheckboxGroup name="brandIds" items={brands} /><SubmitButton>Add organization</SubmitButton></form>
+    <form action={createRelationship} className="space-y-4 rounded-2xl border border-white/8 bg-[#101214] p-6"><h2 className="font-display text-lg text-white">Add relationship</h2><Field label="Relationship name" name="name" required /><Select label="Organization" name="organizationId" required><option value="">Choose…</option>{organizations.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</Select><div className="grid gap-4 sm:grid-cols-2"><Field label="Contact name" name="contactName" /><Field label="Role / title" name="contactTitle" /></div><Field label="Next follow-up" name="nextFollowUpAt" type="date" /><TextArea label="Summary" name="summary" /><CheckboxGroup name="brandIds" items={brands} /><SubmitButton>Add relationship</SubmitButton></form></section>
+  </div>;
+}

@@ -4,13 +4,60 @@ import { brandDefinitions } from "../lib/command-center/brand-definitions";
 const prisma = new PrismaClient();
 
 async function main() {
+  const brandUrls: Record<string, string[]> = {
+    "sng-labs": ["https://www.snglabs.com"],
+    "handicap-hero": ["https://www.handicap-hero.com"],
+    "stadium-slop": ["https://www.stadiumslop.com"],
+    "team-m8tes": ["https://www.team-m8tes.com"],
+  };
   for (const brand of brandDefinitions) {
     await prisma.brand.upsert({
       where: { key: brand.key },
-      update: brand,
-      create: brand,
+      update: { ...brand, relevantUrls: brandUrls[brand.key] ?? [] },
+      create: { ...brand, relevantUrls: brandUrls[brand.key] ?? [] },
     });
   }
+
+  const brands = await prisma.brand.findMany();
+  const brandIds = Object.fromEntries(brands.map((brand) => [brand.key, brand.id]));
+  const markets = [
+    { key: "minnesota-twin-cities", name: "Minnesota / Twin Cities", region: "Minnesota" },
+    { key: "philadelphia", name: "Philadelphia", region: "Pennsylvania" },
+  ];
+  for (const market of markets) await prisma.market.upsert({ where: { key: market.key }, update: market, create: market });
+  const marketRows = await prisma.market.findMany();
+  const marketIds = Object.fromEntries(marketRows.map((market) => [market.key, market.id]));
+  const teams = [
+    ["minnesota-vikings", "Minnesota Vikings", "minnesota-twin-cities", "Football", "NFL", "U.S. Bank Stadium"],
+    ["minnesota-twins", "Minnesota Twins", "minnesota-twin-cities", "Baseball", "MLB", "Target Field"],
+    ["minnesota-timberwolves", "Minnesota Timberwolves", "minnesota-twin-cities", "Basketball", "NBA", "Target Center"],
+    ["minnesota-wild", "Minnesota Wild", "minnesota-twin-cities", "Hockey", "NHL", "Xcel Energy Center"],
+    ["minnesota-united", "Minnesota United", "minnesota-twin-cities", "Soccer", "MLS", "Allianz Field"],
+    ["minnesota-gophers", "Minnesota Gophers", "minnesota-twin-cities", "College sports", "NCAA", null],
+    ["philadelphia-eagles", "Philadelphia Eagles", "philadelphia", "Football", "NFL", "Lincoln Financial Field"],
+    ["philadelphia-phillies", "Philadelphia Phillies", "philadelphia", "Baseball", "MLB", "Citizens Bank Park"],
+    ["philadelphia-76ers", "Philadelphia 76ers", "philadelphia", "Basketball", "NBA", "Wells Fargo Center"],
+    ["philadelphia-flyers", "Philadelphia Flyers", "philadelphia", "Hockey", "NHL", "Wells Fargo Center"],
+  ] as const;
+  for (const [key, name, marketKey, sport, league, venueName] of teams) {
+    await prisma.team.upsert({
+      where: { key },
+      update: { name, marketId: marketIds[marketKey], sport, league, venueName },
+      create: {
+        key, name, marketId: marketIds[marketKey], sport, league, venueName,
+        brands: { connect: ["rank-eye-q", "handicap-hero", "fantasytrack", "stadium-slop", "team-m8tes"].map((brandKey) => ({ id: brandIds[brandKey] })) },
+      },
+    });
+  }
+
+  await prisma.organization.upsert({
+    where: { name: "KFAN" },
+    update: { marketId: marketIds["minnesota-twin-cities"] },
+    create: {
+      name: "KFAN", type: "MEDIA", marketId: marketIds["minnesota-twin-cities"], websiteUrl: "https://www.iheart.com/live/kfan-1209/",
+      relevantBrands: { connect: ["rank-eye-q", "handicap-hero", "stadium-slop", "team-m8tes"].map((brandKey) => ({ id: brandIds[brandKey] })) },
+    },
+  });
 }
 
 main()
