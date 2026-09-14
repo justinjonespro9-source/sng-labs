@@ -131,7 +131,7 @@ export async function updateOpportunityStatus(opportunityId: string, formData: F
 export async function createContentFromOpportunity(formData: FormData) {
   const user = await requireEditor();
   const input = z.object({ opportunityId: text, brandId: text, objective: text, hook: text, rationale: text, body: z.string().trim().min(1).max(20000), callToAction: optionalText, visualBrief: optionalText, socialAccountId: optionalText }).parse({
-    opportunityId: formData.get("opportunityId"), brandId: formData.get("brandId"), objective: formData.get("objective"), hook: formData.get("hook"), rationale: formData.get("rationale"), body: formData.get("body"), callToAction: formData.get("callToAction"), visualBrief: formData.get("visualBrief"), socialAccountId: formData.get("socialAccountId"),
+    opportunityId: formData.get("opportunityId"), brandId: formData.get("brandId"), objective: formData.get("objective"), hook: formData.get("hook"), rationale: formData.get("rationale"), body: formData.get("body"), callToAction: formData.get("callToAction"), visualBrief: formData.get("visualBrief"), socialAccountId: String(formData.get("socialAccountId") ?? ""),
   });
   const [opportunityExists, brand] = await Promise.all([
     prisma.opportunity.findUnique({ where: { id: input.opportunityId }, select: { id: true } }),
@@ -139,14 +139,17 @@ export async function createContentFromOpportunity(formData: FormData) {
   ]);
   if (!opportunityExists) throw new Error("Opportunity not found");
   if (!brand) throw new Error("Choose an active canonical brand");
-  const angle = await prisma.brandAngle.upsert({
-    where: { opportunityId_brandId: { opportunityId: input.opportunityId, brandId: input.brandId } },
-    update: { objective: input.objective, hook: input.hook, rationale: input.rationale, suggestedVisual: input.visualBrief },
-    create: { opportunityId: input.opportunityId, brandId: input.brandId, objective: input.objective, hook: input.hook, rationale: input.rationale, suggestedVisual: input.visualBrief },
+  const draft = await prisma.$transaction(async (tx) => {
+    const angle = await tx.brandAngle.upsert({
+      where: { opportunityId_brandId: { opportunityId: input.opportunityId, brandId: input.brandId } },
+      update: { objective: input.objective, hook: input.hook, rationale: input.rationale, suggestedVisual: input.visualBrief },
+      create: { opportunityId: input.opportunityId, brandId: input.brandId, objective: input.objective, hook: input.hook, rationale: input.rationale, suggestedVisual: input.visualBrief },
+    });
+    const created = await tx.contentDraft.create({ data: { brandAngleId: angle.id, socialAccountId: input.socialAccountId, body: input.body, callToAction: input.callToAction, visualBrief: input.visualBrief } });
+    await tx.opportunity.update({ where: { id: input.opportunityId }, data: { status: "DEVELOPING" } });
+    await tx.auditEvent.create({ data: { actorId: user.id, action: "content.create", entityType: "ContentDraft", entityId: created.id } });
+    return created;
   });
-  const draft = await prisma.contentDraft.create({ data: { brandAngleId: angle.id, socialAccountId: input.socialAccountId, body: input.body, callToAction: input.callToAction, visualBrief: input.visualBrief } });
-  await prisma.opportunity.update({ where: { id: input.opportunityId }, data: { status: "DEVELOPING" } });
-  await audit(user.id, "content.create", "ContentDraft", draft.id);
   redirect(`/command-center/queue?created=${draft.id}`);
 }
 
