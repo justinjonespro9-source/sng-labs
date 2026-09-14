@@ -15,5 +15,5 @@ export const commandCenterNavigation = [
 ] as const;
 
 export const scaffoldSections = commandCenterNavigation.filter(
-  (item) => !["overview", "opportunities", "brands", "markets", "campaigns", "relationships"].includes(item.key),
+  (item) => !["overview", "opportunities", "queue", "brands", "markets", "campaigns", "relationships"].includes(item.key),
 );

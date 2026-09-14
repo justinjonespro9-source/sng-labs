@@ -61,6 +61,7 @@ enum DraftStatus {
   READY
   PUBLISHED
   REJECTED
+  ARCHIVED
 }
 
 enum ApprovalDecision {
@@ -80,7 +81,7 @@ enum PublicationStatus {
 enum HealthState {
   HEALTHY
   WATCH
-  RECOVERY
+  AT_RISK
 }
 
 enum JobStatus {
@@ -196,14 +197,18 @@ model Brand {
   id                  String           @id @default(cuid())
   key                 String           @unique
   name                String
+  shortName           String?
   kind                BrandKind
   description         String
+  purpose             String?
+  coreProposition     String?
   audience            String
   voice               String
   primaryCtas         String[]         @default([])
   relevantUrls        String[]         @default([])
   terminology         Json?
   objectives          String[]
+  contentPillars      String[]         @default([])
   preferredContent    String[]
   prohibitedContent   String[]
   callToActionRules   String
@@ -269,6 +274,7 @@ model Opportunity {
   sourceEventId        String?
   title                String
   summary              String
+  whyItMatters         String?
   status               OpportunityStatus     @default(NEW)
   urgency              Int                   @default(0)
   confidence           Float?

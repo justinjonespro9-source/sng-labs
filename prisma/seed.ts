@@ -11,10 +11,17 @@ async function main() {
     "team-m8tes": ["https://www.team-m8tes.com"],
   };
   for (const brand of brandDefinitions) {
+    const existing = await prisma.brand.findUnique({ where: { key: brand.key } });
     await prisma.brand.upsert({
       where: { key: brand.key },
-      update: { ...brand, relevantUrls: brandUrls[brand.key] ?? [] },
-      create: { ...brand, relevantUrls: brandUrls[brand.key] ?? [] },
+      update: {
+        shortName: existing?.shortName ?? brand.shortName,
+        purpose: existing?.purpose ?? brand.objectives[0],
+        coreProposition: existing?.coreProposition ?? brand.description,
+        contentPillars: existing?.contentPillars.length ? existing.contentPillars : brand.preferredContent,
+        relevantUrls: existing?.relevantUrls.length ? existing.relevantUrls : (brandUrls[brand.key] ?? []),
+      },
+      create: { ...brand, purpose: brand.objectives[0], coreProposition: brand.description, contentPillars: brand.preferredContent, relevantUrls: brandUrls[brand.key] ?? [] },
     });
   }
 
