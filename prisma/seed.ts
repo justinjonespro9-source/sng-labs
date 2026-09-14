@@ -11,6 +11,21 @@ async function main() {
     "team-m8tes": ["https://www.team-m8tes.com"],
   };
   for (const brand of brandDefinitions) {
+    const persistedBrand = {
+      key: brand.key,
+      name: brand.name,
+      shortName: brand.shortName,
+      kind: brand.kind,
+      description: brand.description,
+      audience: brand.audience,
+      voice: brand.voice,
+      objectives: brand.objectives,
+      preferredContent: brand.preferredContent,
+      prohibitedContent: brand.prohibitedContent,
+      callToActionRules: brand.callToActionRules,
+      visualDirection: brand.visualDirection,
+      defaultCadenceNotes: brand.defaultCadenceNotes,
+    };
     const existing = await prisma.brand.findUnique({ where: { key: brand.key } });
     await prisma.brand.upsert({
       where: { key: brand.key },
@@ -21,9 +36,13 @@ async function main() {
         contentPillars: existing?.contentPillars.length ? existing.contentPillars : brand.preferredContent,
         relevantUrls: existing?.relevantUrls.length ? existing.relevantUrls : (brandUrls[brand.key] ?? []),
       },
-      create: { ...brand, purpose: brand.objectives[0], coreProposition: brand.description, contentPillars: brand.preferredContent, relevantUrls: brandUrls[brand.key] ?? [] },
+      create: { ...persistedBrand, purpose: brand.objectives[0], coreProposition: brand.description, contentPillars: brand.preferredContent, relevantUrls: brandUrls[brand.key] ?? [] },
     });
   }
+
+  const seededBrands = await prisma.brand.findMany({ where: { key: { in: brandDefinitions.map((brand) => brand.key) } }, select: { key: true, active: true } });
+  if (seededBrands.length !== brandDefinitions.length) throw new Error(`Expected ${brandDefinitions.length} canonical brands; found ${seededBrands.length}`);
+  console.log(`Verified ${seededBrands.length} canonical SNG brand profiles (${seededBrands.filter((brand) => brand.active).length} active).`);
 
   const brands = await prisma.brand.findMany();
   const brandIds = Object.fromEntries(brands.map((brand) => [brand.key, brand.id]));
