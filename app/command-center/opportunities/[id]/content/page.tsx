@@ -1,0 +1,12 @@
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { Field, Select, SubmitButton, TextArea } from "@/components/command-center/form-fields";
+import { createContentFromOpportunity } from "@/lib/command-center/actions";
+import { prisma } from "@/lib/prisma";
+
+export default async function CreateContentPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const [opportunity, brands] = await Promise.all([prisma.opportunity.findUnique({ where: { id }, include: { markets: true, teams: true, campaigns: { include: { campaign: true } } } }), prisma.brand.findMany({ where: { active: true }, include: { socialAccounts: true }, orderBy: { name: "asc" } })]);
+  if (!opportunity) notFound();
+  return <div><Link href="/command-center/opportunities" className="text-xs text-[#b8d4c8]">← Opportunity Feed</Link><h1 className="mt-5 font-display text-3xl text-white">Create content</h1><p className="mt-2 text-sm text-[#8f9391]">Context carried forward from: {opportunity.title}</p><section className="mt-6 rounded-2xl border border-white/8 bg-[#101214] p-5"><p className="text-sm text-white">{opportunity.summary}</p><p className="mt-2 text-xs text-[#747976]">{[...opportunity.markets.map((x) => x.name), ...opportunity.teams.map((x) => x.name), ...opportunity.campaigns.map((x) => x.campaign.name)].join(" · ") || "Portfolio-wide"}</p></section><form action={createContentFromOpportunity} className="mt-6 space-y-4 rounded-2xl border border-white/8 bg-[#101214] p-6"><input type="hidden" name="opportunityId" value={opportunity.id} /><Select label="Brand" name="brandId" required><option value="">Choose the editorial owner…</option>{brands.map((brand) => <option key={brand.id} value={brand.id}>{brand.name}</option>)}</Select><Field label="Objective" name="objective" placeholder="What should this content accomplish?" required /><Field label="Distinct editorial hook" name="hook" placeholder="Why this angle belongs to this brand" required /><TextArea label="Angle rationale" name="rationale" rows={3} required /><TextArea label="Draft copy" name="body" rows={8} required /><TextArea label="Visual brief / asset notes" name="visualBrief" rows={3} /><Field label="CTA" name="callToAction" /><p className="text-xs text-[#747976]">This creates a draft only. It cannot publish without human review and approval.</p><SubmitButton>Create draft</SubmitButton></form></div>;
+}

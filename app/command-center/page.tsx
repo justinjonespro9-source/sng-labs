@@ -8,7 +8,7 @@ export default async function CommandCenterOverviewPage() {
     prisma.opportunity.count({ where: { status: { in: ["NEW", "REVIEWED", "DEVELOPING", "QUEUED"] } } }),
     prisma.contentDraft.count({ where: { status: "NEEDS_REVIEW" } }),
     prisma.publication.count({ where: { status: { in: ["PLANNED", "READY"] } } }),
-    prisma.accountHealthSnapshot.count({ where: { state: { in: ["WATCH", "RECOVERY"] } } }),
+    prisma.accountHealthSnapshot.count({ where: { state: { in: ["WATCH", "AT_RISK"] } } }),
     prisma.opportunity.findMany({ orderBy: [{ urgency: "desc" }, { createdAt: "desc" }], take: 4 }),
     prisma.relationship.count({ where: { nextFollowUpAt: { lte: new Date() }, stage: { notIn: ["CLOSED", "NOT_PURSUING"] } } }),
   ]);
@@ -18,6 +18,10 @@ export default async function CommandCenterOverviewPage() {
     { label: "Scheduled", value: String(scheduled), detail: "Approved publications queued" },
     { label: "Accounts on watch", value: String(watch), detail: "Health may limit distribution" },
   ];
+  const [activeCampaigns, dueRelationships] = await Promise.all([
+    prisma.campaign.findMany({ where: { status: "ACTIVE" }, include: { brands: true }, orderBy: { endsAt: "asc" }, take: 3 }),
+    prisma.relationship.findMany({ where: { nextFollowUpAt: { lte: new Date() }, stage: { notIn: ["CLOSED", "NOT_PURSUING"] } }, include: { organization: true }, orderBy: { nextFollowUpAt: "asc" }, take: 4 }),
+  ]);
   return (
     <div>
       <PageHeader
@@ -59,7 +63,7 @@ export default async function CommandCenterOverviewPage() {
             {[
               ["Healthy", "Normal cadence", "#87d2ac"],
               ["Watch", "Post selectively", "#f0bd65"],
-              ["Recovery", "High-confidence only", "#ec7f72"],
+              ["At Risk", "Pause or use high-confidence content only", "#ec7f72"],
             ].map(([state, detail, color]) => (
               <div key={state} className="flex items-center justify-between rounded-xl border border-white/7 bg-white/[0.02] px-4 py-3">
                 <div className="flex items-center gap-3">
@@ -73,7 +77,7 @@ export default async function CommandCenterOverviewPage() {
         </article>
       </section>
 
-      <section className="mt-8 rounded-2xl border border-white/8 bg-[#101214] p-6"><div className="flex items-center justify-between gap-4"><div><h2 className="font-display text-lg font-semibold text-white">Relationship follow-ups</h2><p className="mt-1 text-xs text-[#7f8381]">{followUps} due or overdue</p></div><Link href="/command-center/relationships" className="text-xs text-[#b8d4c8]">Open pipeline →</Link></div></section>
+      <section className="mt-8 grid gap-6 xl:grid-cols-2"><article className="rounded-2xl border border-white/8 bg-[#101214] p-6"><div className="flex items-center justify-between"><div><h2 className="font-display text-lg font-semibold text-white">Relationship follow-ups</h2><p className="mt-1 text-xs text-[#7f8381]">{followUps} due or overdue</p></div><Link href="/command-center/relationships" className="text-xs text-[#b8d4c8]">Open pipeline →</Link></div><div className="mt-5 space-y-2">{dueRelationships.map((item) => <Link key={item.id} href={`/command-center/relationships/${item.id}`} className="flex justify-between rounded-xl border border-white/7 p-3 text-sm text-white"><span>{item.organization.name}</span><span className="text-xs text-[#ec7f72]">{item.nextFollowUpAt?.toLocaleDateString()}</span></Link>)}{!dueRelationships.length && <p className="text-sm text-[#777b78]">No follow-ups due.</p>}</div></article><article className="rounded-2xl border border-white/8 bg-[#101214] p-6"><div className="flex items-center justify-between"><div><h2 className="font-display text-lg font-semibold text-white">Active campaigns</h2><p className="mt-1 text-xs text-[#7f8381]">Current growth work</p></div><Link href="/command-center/campaigns" className="text-xs text-[#b8d4c8]">View campaigns →</Link></div><div className="mt-5 space-y-2">{activeCampaigns.map((item) => <Link key={item.id} href={`/command-center/campaigns/${item.id}`} className="block rounded-xl border border-white/7 p-3"><p className="text-sm text-white">{item.name}</p><p className="mt-1 text-xs text-[#777b78]">{item.brands.map((x) => x.name).join(" · ") || "Portfolio"}</p></Link>)}{!activeCampaigns.length && <p className="text-sm text-[#777b78]">No active campaigns. Planning campaigns stay off today’s view.</p>}</div></article></section>
 
       <section className="mt-8 rounded-2xl border border-white/8 bg-[#101214] p-6">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
