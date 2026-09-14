@@ -133,6 +133,12 @@ export async function createContentFromOpportunity(formData: FormData) {
   const input = z.object({ opportunityId: text, brandId: text, objective: text, hook: text, rationale: text, body: z.string().trim().min(1).max(20000), callToAction: optionalText, visualBrief: optionalText, socialAccountId: optionalText }).parse({
     opportunityId: formData.get("opportunityId"), brandId: formData.get("brandId"), objective: formData.get("objective"), hook: formData.get("hook"), rationale: formData.get("rationale"), body: formData.get("body"), callToAction: formData.get("callToAction"), visualBrief: formData.get("visualBrief"), socialAccountId: formData.get("socialAccountId"),
   });
+  const [opportunityExists, brand] = await Promise.all([
+    prisma.opportunity.findUnique({ where: { id: input.opportunityId }, select: { id: true } }),
+    prisma.brand.findFirst({ where: { id: input.brandId, active: true }, select: { id: true } }),
+  ]);
+  if (!opportunityExists) throw new Error("Opportunity not found");
+  if (!brand) throw new Error("Choose an active canonical brand");
   const angle = await prisma.brandAngle.upsert({
     where: { opportunityId_brandId: { opportunityId: input.opportunityId, brandId: input.brandId } },
     update: { objective: input.objective, hook: input.hook, rationale: input.rationale, suggestedVisual: input.visualBrief },

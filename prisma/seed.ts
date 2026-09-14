@@ -25,6 +25,10 @@ async function main() {
     });
   }
 
+  const seededBrands = await prisma.brand.findMany({ where: { key: { in: brandDefinitions.map((brand) => brand.key) } }, select: { key: true, active: true } });
+  if (seededBrands.length !== brandDefinitions.length) throw new Error(`Expected ${brandDefinitions.length} canonical brands; found ${seededBrands.length}`);
+  console.log(`Verified ${seededBrands.length} canonical SNG brand profiles (${seededBrands.filter((brand) => brand.active).length} active).`);
+
   const brands = await prisma.brand.findMany();
   const brandIds = Object.fromEntries(brands.map((brand) => [brand.key, brand.id]));
   const markets = [
