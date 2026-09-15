@@ -1,6 +1,6 @@
 import { Prisma, PrismaClient } from "@prisma/client";
 import { brandDefinitions } from "../lib/command-center/brand-definitions";
-import { shouldInitializeBrandBrain, stadiumSlopBrandBrain, teamM8tesBrandBrain } from "../lib/command-center/brand-brain";
+import { rankEyeQBrandBrain, shouldInitializeBrandBrain, stadiumSlopBrandBrain, teamM8tesBrandBrain } from "../lib/command-center/brand-brain";
 import { campaignDefinitions, growthProgramDefinitions } from "../lib/command-center/campaign-definitions";
 
 const prisma = new PrismaClient();
@@ -110,6 +110,39 @@ async function main() {
     console.log("Configured canonical Team-M8tes Brand Brain v1.");
   } else {
     console.log(`Preserved operator-managed Team-M8tes Brand Brain v${teamM8tes.brandBrainVersion}.`);
+  }
+
+  const rankEyeQ = await prisma.brand.findUnique({ where: { key: "rank-eye-q" } });
+  if (!rankEyeQ) throw new Error("Canonical RankEyeQ brand is missing");
+  if (shouldInitializeBrandBrain(rankEyeQ.brandBrainVersion)) {
+    await prisma.brand.update({
+      where: { id: rankEyeQ.id },
+      data: {
+        purpose: rankEyeQBrandBrain.purpose,
+        corePromise: rankEyeQBrandBrain.corePromise,
+        coreProposition: rankEyeQBrandBrain.coreProposition,
+        audience: rankEyeQBrandBrain.audience,
+        secondaryAudiences: rankEyeQBrandBrain.secondaryAudiences,
+        distributionAudiences: rankEyeQBrandBrain.distributionAudiences,
+        jobsToBeDone: rankEyeQBrandBrain.jobsToBeDone,
+        contentPillars: rankEyeQBrandBrain.contentPillars,
+        voice: rankEyeQBrandBrain.voice,
+        voiceTraits: rankEyeQBrandBrain.voiceTraits,
+        communicationPatterns: rankEyeQBrandBrain.communicationPatterns,
+        contentModes: rankEyeQBrandBrain.contentModes as Prisma.InputJsonValue,
+        prohibitedContent: rankEyeQBrandBrain.prohibitedContent,
+        factualRequirements: rankEyeQBrandBrain.factualRequirements,
+        affiliationRestrictions: rankEyeQBrandBrain.affiliationRestrictions,
+        aiOperatingInstructions: rankEyeQBrandBrain.aiOperatingInstructions,
+        primaryCtas: ["Prove you know ball.", "Rank the field."],
+        callToActionRules: "Lead consumer acquisition with competition and ranking participation. Tailor expert, creator, media, and community outreach around measurable credibility rather than generic promotion.",
+        brandBrainVersion: 1,
+        brandBrainConfiguredAt: new Date(),
+      },
+    });
+    console.log("Configured canonical RankEyeQ Brand Brain v1.");
+  } else {
+    console.log(`Preserved operator-managed RankEyeQ Brand Brain v${rankEyeQ.brandBrainVersion}.`);
   }
 
   const brands = await prisma.brand.findMany();

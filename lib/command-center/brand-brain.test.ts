@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { contentModesToText, hasConfiguredBrandBrain, parseContentModes, parseLines, shouldInitializeBrandBrain, stadiumSlopBrandBrain, teamM8tesBrandBrain } from "./brand-brain";
+import { contentModesToText, hasConfiguredBrandBrain, parseContentModes, parseLines, rankEyeQBrandBrain, shouldInitializeBrandBrain, stadiumSlopBrandBrain, teamM8tesBrandBrain } from "./brand-brain";
 
 describe("Brand Brain", () => {
   it("uses an explicit configuration state", () => {
@@ -33,5 +33,14 @@ describe("Brand Brain", () => {
     expect(teamM8tesBrandBrain.contentPillars).toEqual(["Shared Fandom", "Singles & Chemistry", "Game-Day Connection", "Compatibility Beyond a Photo", "Real-World Possibility"]);
     expect(teamM8tesBrandBrain.contentModes.map((mode) => mode.name)).toEqual(["Acquire", "Engage", "Game-Day", "Match / Connect", "Date Idea", "Culture / Humor", "Explain", "Outreach"]);
     expect(teamM8tesBrandBrain.aiOperatingInstructions).toContain("Do not sanitize dating language into vague community or networking language");
+  });
+
+  it("keeps RankEyeQ competition first and intelligence second", () => {
+    expect(rankEyeQBrandBrain.corePromise).toBe("Prove you know ball.");
+    expect(rankEyeQBrandBrain.coreProposition).toContain("Everybody has rankings. RankEyeQ keeps score.");
+    expect(rankEyeQBrandBrain.contentPillars).toEqual(["Prove It", "Rank the Field", "Receipts", "Humans vs Experts vs AI", "Reputation"]);
+    expect(rankEyeQBrandBrain.contentModes.map((mode) => mode.name)).toEqual(["Acquire", "Rank", "Challenge", "Results / Receipts", "Compare", "Report / Insight", "Reputation / Celebrate", "Outreach"]);
+    expect(rankEyeQBrandBrain.aiOperatingInstructions).toContain("Distinguish submitted predictions, consensus, and actual results");
+    expect(rankEyeQBrandBrain.prohibitedContent.some((rule) => rule.includes("sportsbook"))).toBe(true);
   });
 });
