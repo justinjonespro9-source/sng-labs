@@ -1,6 +1,6 @@
 import { Prisma, PrismaClient } from "@prisma/client";
 import { brandDefinitions } from "../lib/command-center/brand-definitions";
-import { shouldInitializeBrandBrain, stadiumSlopBrandBrain } from "../lib/command-center/brand-brain";
+import { shouldInitializeBrandBrain, stadiumSlopBrandBrain, teamM8tesBrandBrain } from "../lib/command-center/brand-brain";
 import { campaignDefinitions, growthProgramDefinitions } from "../lib/command-center/campaign-definitions";
 
 const prisma = new PrismaClient();
@@ -77,6 +77,39 @@ async function main() {
     console.log("Configured canonical Stadium Slop Brand Brain v1.");
   } else {
     console.log(`Preserved operator-managed Stadium Slop Brand Brain v${stadiumSlop.brandBrainVersion}.`);
+  }
+
+  const teamM8tes = await prisma.brand.findUnique({ where: { key: "team-m8tes" } });
+  if (!teamM8tes) throw new Error("Canonical Team-M8tes brand is missing");
+  if (shouldInitializeBrandBrain(teamM8tes.brandBrainVersion)) {
+    await prisma.brand.update({
+      where: { id: teamM8tes.id },
+      data: {
+        purpose: teamM8tesBrandBrain.purpose,
+        corePromise: teamM8tesBrandBrain.corePromise,
+        coreProposition: teamM8tesBrandBrain.coreProposition,
+        audience: teamM8tesBrandBrain.audience,
+        secondaryAudiences: teamM8tesBrandBrain.secondaryAudiences,
+        distributionAudiences: teamM8tesBrandBrain.distributionAudiences,
+        jobsToBeDone: teamM8tesBrandBrain.jobsToBeDone,
+        contentPillars: teamM8tesBrandBrain.contentPillars,
+        voice: teamM8tesBrandBrain.voice,
+        voiceTraits: teamM8tesBrandBrain.voiceTraits,
+        communicationPatterns: teamM8tesBrandBrain.communicationPatterns,
+        contentModes: teamM8tesBrandBrain.contentModes as Prisma.InputJsonValue,
+        prohibitedContent: teamM8tesBrandBrain.prohibitedContent,
+        factualRequirements: teamM8tesBrandBrain.factualRequirements,
+        affiliationRestrictions: teamM8tesBrandBrain.affiliationRestrictions,
+        aiOperatingInstructions: teamM8tesBrandBrain.aiOperatingInstructions,
+        primaryCtas: ["Find your person through the teams you love."],
+        callToActionRules: "Keep dating visible for consumer acquisition. Use game-day connection when context supports it, and tailor creator, media, community, and partner outreach rather than copying consumer posts.",
+        brandBrainVersion: 1,
+        brandBrainConfiguredAt: new Date(),
+      },
+    });
+    console.log("Configured canonical Team-M8tes Brand Brain v1.");
+  } else {
+    console.log(`Preserved operator-managed Team-M8tes Brand Brain v${teamM8tes.brandBrainVersion}.`);
   }
 
   const brands = await prisma.brand.findMany();
