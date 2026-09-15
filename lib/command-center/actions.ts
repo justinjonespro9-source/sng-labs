@@ -6,6 +6,7 @@ import { z } from "zod";
 import { requireCommandCenterUser } from "@/lib/auth/session";
 import { assertContentTransition, canDeleteContent, canDeleteOpportunity, hasSubstantiveContentChange, statusAfterContentEdit, type ContentStatus } from "@/lib/command-center/content-workflow";
 import { mergeActivationContext } from "@/lib/command-center/campaign-workflow";
+import { parseContentModes, parseLines } from "@/lib/command-center/brand-brain";
 import { prisma } from "@/lib/prisma";
 
 const text = z.string().trim().min(1).max(500);
@@ -128,6 +129,53 @@ export async function updateBrandProfile(brandId: string, formData: FormData) {
   await prisma.brand.update({ where: { id: brandId }, data: { ...input, objectives: split("objectives"), contentPillars: split("contentPillars"), primaryCtas: split("primaryCtas"), relevantUrls: split("relevantUrls"), preferredContent: split("preferredContent"), prohibitedContent: split("prohibitedContent"), terminology: { notes: split("terminology") }, active: formData.get("active") === "on" } });
   await audit(user.id, "brand.update", "Brand", brandId);
   revalidatePath("/command-center/brands");
+}
+
+export async function updateBrandBrain(brandId: string, formData: FormData) {
+  const user = await requireEditor();
+  const input = z.object({
+    purpose: z.string().trim().min(1).max(5000),
+    corePromise: z.string().trim().min(1).max(5000),
+    coreProposition: z.string().trim().min(1).max(5000),
+    audience: z.string().trim().min(1).max(5000),
+    voice: z.string().trim().min(1).max(5000),
+  }).parse({
+    purpose: formData.get("purpose"),
+    corePromise: formData.get("corePromise"),
+    coreProposition: formData.get("coreProposition"),
+    audience: formData.get("audience"),
+    voice: formData.get("voice"),
+  });
+  const contentModes = parseContentModes(formData.get("contentModes"));
+  if (!contentModes.length) throw new Error("At least one content mode with a name and goal is required");
+  const contentPillars = parseLines(formData.get("contentPillars"));
+  const aiOperatingInstructions = parseLines(formData.get("aiOperatingInstructions"));
+  if (!contentPillars.length || !aiOperatingInstructions.length) throw new Error("Messaging pillars and AI operating instructions are required");
+  await prisma.brand.update({
+    where: { id: brandId },
+    data: {
+      ...input,
+      secondaryAudiences: parseLines(formData.get("secondaryAudiences")),
+      distributionAudiences: parseLines(formData.get("distributionAudiences")),
+      jobsToBeDone: parseLines(formData.get("jobsToBeDone")),
+      contentPillars,
+      voiceTraits: parseLines(formData.get("voiceTraits")),
+      communicationPatterns: parseLines(formData.get("communicationPatterns")),
+      contentModes,
+      prohibitedContent: parseLines(formData.get("prohibitedContent")),
+      factualRequirements: parseLines(formData.get("factualRequirements")),
+      affiliationRestrictions: parseLines(formData.get("affiliationRestrictions")),
+      aiOperatingInstructions,
+      primaryCtas: parseLines(formData.get("primaryCtas")),
+      callToActionRules: String(formData.get("callToActionRules") ?? "").trim(),
+      brandBrainVersion: 1,
+      brandBrainConfiguredAt: new Date(),
+    },
+  });
+  await audit(user.id, "brand.brain.update", "Brand", brandId, { version: 1 });
+  revalidatePath("/command-center/brands");
+  revalidatePath(`/command-center/brands/${brandId}`);
+  redirect(`/command-center/brands/${brandId}`);
 }
 
 export async function updateOpportunityStatus(opportunityId: string, formData: FormData) {
