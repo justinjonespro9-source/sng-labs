@@ -11,7 +11,7 @@ function dateTimeValue(value: Date | null) {
 export default async function EditOpportunityPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const [opportunity, markets, teams, campaigns] = await Promise.all([
-    prisma.opportunity.findUnique({ where: { id }, include: { markets: true, teams: true, campaigns: true, angles: { include: { brand: true, drafts: { select: { id: true } } } } } }),
+    prisma.opportunity.findUnique({ where: { id }, include: { activation: { include: { campaign: true } }, markets: true, teams: true, campaigns: true, angles: { include: { brand: true, drafts: { select: { id: true } } } } } }),
     prisma.market.findMany({ orderBy: { name: "asc" } }),
     prisma.team.findMany({ orderBy: { name: "asc" } }),
     prisma.campaign.findMany({ orderBy: { name: "asc" } }),
@@ -22,6 +22,7 @@ export default async function EditOpportunityPage({ params }: { params: Promise<
     <Link href="/command-center/opportunities" className="text-xs text-[#b8d4c8]">← Opportunity Feed</Link>
     <h1 className="mt-5 font-display text-3xl text-white">Edit Opportunity</h1>
     <p className="mt-2 text-sm text-[#8f9391]">Linked content stays attached to this Opportunity. Existing relationships change only when you change the selections below.</p>
+    {opportunity.activation && <p className="mt-3 rounded-lg border border-white/8 bg-[#101214] px-4 py-3 text-xs text-[#b8d4c8]">Activation context is preserved: {opportunity.activation.campaign.name} → {opportunity.activation.name}</p>}
     <form action={updateOpportunity.bind(null, opportunity.id)} className="mt-6 space-y-4 rounded-2xl border border-white/8 bg-[#101214] p-6">
       <Field label="Title" name="title" required defaultValue={opportunity.title} />
       <TextArea label="What is happening?" name="summary" rows={3} required defaultValue={opportunity.summary} />

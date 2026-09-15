@@ -1,5 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import { brandDefinitions } from "../lib/command-center/brand-definitions";
+import { campaignDefinitions, growthProgramDefinitions } from "../lib/command-center/campaign-definitions";
 
 const prisma = new PrismaClient();
 
@@ -46,6 +47,23 @@ async function main() {
 
   const brands = await prisma.brand.findMany();
   const brandIds = Object.fromEntries(brands.map((brand) => [brand.key, brand.id]));
+  for (const program of growthProgramDefinitions) {
+    await prisma.growthProgram.upsert({
+      where: { key: program.key },
+      update: { name: program.name, brands: { connect: program.brandKeys.map((key) => ({ id: brandIds[key] })) } },
+      create: { key: program.key, name: program.name, description: program.description, operatingDescription: program.operatingDescription, brands: { connect: program.brandKeys.map((key) => ({ id: brandIds[key] })) } },
+    });
+  }
+  const programRows = await prisma.growthProgram.findMany();
+  const programIds = Object.fromEntries(programRows.map((program) => [program.key, program.id]));
+  for (const [key, programKey, name, brandKey, objectiveType, objective, primaryAudience, primaryCta, coreMessage, successDefinition, kpis] of campaignDefinitions) {
+    const existing = await prisma.campaign.findUnique({ where: { key } }) ?? await prisma.campaign.findFirst({ where: { key: null, name } });
+    if (existing) {
+      await prisma.campaign.update({ where: { id: existing.id }, data: { key, programId: programIds[programKey], brands: { connect: { id: brandIds[brandKey] } } } });
+    } else {
+      await prisma.campaign.create({ data: { key, programId: programIds[programKey], name, objectiveType, objective, primaryAudience, primaryCta, coreMessage, successDefinition, kpis: [...kpis], status: "ACTIVE", brands: { connect: { id: brandIds[brandKey] } } } });
+    }
+  }
   const markets = [
     { key: "minnesota-twin-cities", name: "Minnesota / Twin Cities", region: "Minnesota" },
     { key: "philadelphia", name: "Philadelphia", region: "Pennsylvania" },
@@ -72,6 +90,34 @@ async function main() {
       create: {
         key, name, marketId: marketIds[marketKey], sport, league, venueName,
         brands: { connect: ["rank-eye-q", "handicap-hero", "fantasytrack", "stadium-slop", "team-m8tes"].map((brandKey) => ({ id: brandIds[brandKey] })) },
+      },
+    });
+  }
+
+  const [stadiumCampaign, vikings] = await Promise.all([
+    prisma.campaign.findUnique({ where: { key: "nfl-stadium-food-rankings" } }),
+    prisma.team.findUnique({ where: { key: "minnesota-vikings" } }),
+  ]);
+  if (stadiumCampaign && vikings) {
+    await prisma.campaignActivation.upsert({
+      where: { key: "nfl-stadium-food-rankings-minnesota-vikings" },
+      update: { campaignId: stadiumCampaign.id, marketId: vikings.marketId, teamId: vikings.id, venueName: vikings.venueName, brands: { connect: [{ id: brandIds["stadium-slop"] }, { id: brandIds["team-m8tes"] }] } },
+      create: {
+        key: "nfl-stadium-food-rankings-minnesota-vikings",
+        campaignId: stadiumCampaign.id,
+        name: "Minnesota Vikings / U.S. Bank Stadium",
+        status: "READY",
+        priority: "HIGH",
+        marketId: vikings.marketId,
+        teamId: vikings.id,
+        venueName: vikings.venueName,
+        sport: "NFL",
+        season: "2026",
+        audienceSegment: "Vikings game attendees and Minnesota sports fans",
+        coreMessage: "What is actually worth eating at U.S. Bank Stadium?",
+        callToAction: "Rate what you ate.",
+        objective: "Build the primary local proving ground for verified NFL stadium food ratings.",
+        brands: { connect: [{ id: brandIds["stadium-slop"] }, { id: brandIds["team-m8tes"] }] },
       },
     });
   }
