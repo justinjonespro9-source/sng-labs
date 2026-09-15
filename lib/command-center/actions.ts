@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireCommandCenterUser } from "@/lib/auth/session";
 import { assertContentTransition, canDeleteContent, canDeleteOpportunity, hasSubstantiveContentChange, statusAfterContentEdit, type ContentStatus } from "@/lib/command-center/content-workflow";
+import { mergeActivationContext } from "@/lib/command-center/campaign-workflow";
 import { prisma } from "@/lib/prisma";
 
 const text = z.string().trim().min(1).max(500);
@@ -18,6 +19,10 @@ async function requireEditor() {
 
 function ids(formData: FormData, key: string) {
   return formData.getAll(key).map(String).filter(Boolean);
+}
+
+function lines(formData: FormData, key: string) {
+  return String(formData.get(key) ?? "").split("\n").map((value) => value.trim()).filter(Boolean);
 }
 
 function optionalDate(value: FormDataEntryValue | null) {
@@ -51,11 +56,11 @@ export async function createTeam(formData: FormData) {
 
 export async function createCampaign(formData: FormData) {
   const user = await requireEditor();
-  const input = z.object({ name: text, description: optionalText, objective: optionalText }).parse({
-    name: formData.get("name"), description: formData.get("description"), objective: formData.get("objective"),
+  const input = z.object({ name: text, programId: optionalText, description: optionalText, objective: optionalText, objectiveType: z.enum(["USER_ACQUISITION", "PARTICIPATION", "RETENTION", "BRAND_AWARENESS", "CREATOR_ACTIVATION", "MEDIA_EARNED", "PARTNERSHIP", "INDUSTRY_OUTREACH", "PRODUCT_VALIDATION", "OTHER"]), primaryAudience: optionalText, primaryCta: optionalText, coreMessage: optionalText, sport: optionalText, season: optionalText, notes: optionalText, successDefinition: optionalText, status: z.enum(["PLANNING", "ACTIVE", "PAUSED", "COMPLETE", "ARCHIVED"]) }).parse({
+    name: formData.get("name"), programId: String(formData.get("programId") ?? ""), description: String(formData.get("description") ?? ""), objective: String(formData.get("objective") ?? ""), objectiveType: formData.get("objectiveType"), primaryAudience: String(formData.get("primaryAudience") ?? ""), primaryCta: String(formData.get("primaryCta") ?? ""), coreMessage: String(formData.get("coreMessage") ?? ""), sport: String(formData.get("sport") ?? ""), season: String(formData.get("season") ?? ""), notes: String(formData.get("notes") ?? ""), successDefinition: String(formData.get("successDefinition") ?? ""), status: formData.get("status"),
   });
   const campaign = await prisma.campaign.create({ data: {
-    ...input,
+    ...input, active: input.status !== "ARCHIVED", kpis: lines(formData, "kpis"),
     startsAt: optionalDate(formData.get("startsAt")), endsAt: optionalDate(formData.get("endsAt")),
     brands: { connect: ids(formData, "brandIds").map((id) => ({ id })) },
     markets: { connect: ids(formData, "marketIds").map((id) => ({ id })) },
@@ -63,6 +68,7 @@ export async function createCampaign(formData: FormData) {
   } });
   await audit(user.id, "campaign.create", "Campaign", campaign.id);
   revalidatePath("/command-center/campaigns");
+  redirect(`/command-center/campaigns/${campaign.id}`);
 }
 
 export async function createOpportunity(formData: FormData) {
@@ -71,11 +77,15 @@ export async function createOpportunity(formData: FormData) {
     title: formData.get("title"), summary: formData.get("summary"), whyItMatters: formData.get("whyItMatters"), sourceLabel: formData.get("sourceLabel"), actionRecommendation: formData.get("actionRecommendation"),
   });
   const urgency = z.coerce.number().int().min(0).max(100).parse(formData.get("urgency") ?? 50);
+  const activationId = String(formData.get("activationId") ?? "").trim() || null;
+  const activation = activationId ? await prisma.campaignActivation.findUnique({ where: { id: activationId }, select: { id: true, campaignId: true, marketId: true, teamId: true } }) : null;
+  if (activationId && !activation) throw new Error("Activation not found");
+  const { marketIds, teamIds, campaignIds } = mergeActivationContext({ marketIds: ids(formData, "marketIds"), teamIds: ids(formData, "teamIds"), campaignIds: ids(formData, "campaignIds") }, activation);
   const opportunity = await prisma.opportunity.create({ data: {
-    ...input, urgency, recommendedAt: optionalDate(formData.get("recommendedAt")),
-    markets: { connect: ids(formData, "marketIds").map((id) => ({ id })) },
-    teams: { connect: ids(formData, "teamIds").map((id) => ({ id })) },
-    campaigns: { create: ids(formData, "campaignIds").map((campaignId) => ({ campaignId })) },
+    ...input, urgency, activationId, recommendedAt: optionalDate(formData.get("recommendedAt")),
+    markets: { connect: marketIds.map((id) => ({ id })) },
+    teams: { connect: teamIds.map((id) => ({ id })) },
+    campaigns: { create: campaignIds.map((campaignId) => ({ campaignId })) },
   } });
   await audit(user.id, "opportunity.create", "Opportunity", opportunity.id);
   revalidatePath("/command-center/opportunities");
@@ -135,14 +145,16 @@ export async function updateOpportunity(opportunityId: string, formData: FormDat
     title: formData.get("title"), summary: formData.get("summary"), whyItMatters: String(formData.get("whyItMatters") ?? ""), sourceLabel: String(formData.get("sourceLabel") ?? ""), actionRecommendation: String(formData.get("actionRecommendation") ?? ""), status: formData.get("status"),
   });
   const urgency = z.coerce.number().int().min(0).max(100).parse(formData.get("urgency") ?? 50);
-  const campaignIds = ids(formData, "campaignIds");
+  const current = await prisma.opportunity.findUnique({ where: { id: opportunityId }, select: { activation: { select: { campaignId: true, marketId: true, teamId: true } } } });
+  if (!current) throw new Error("Opportunity not found");
+  const { campaignIds, marketIds, teamIds } = mergeActivationContext({ campaignIds: ids(formData, "campaignIds"), marketIds: ids(formData, "marketIds"), teamIds: ids(formData, "teamIds") }, current.activation);
   await prisma.opportunity.update({ where: { id: opportunityId }, data: {
     ...input,
     urgency,
     recommendedAt: optionalDate(formData.get("recommendedAt")),
     noPostRationale: input.status === "NO_POST" ? String(formData.get("noPostRationale") || "Not worth publishing now") : null,
-    markets: { set: ids(formData, "marketIds").map((id) => ({ id })) },
-    teams: { set: ids(formData, "teamIds").map((id) => ({ id })) },
+    markets: { set: marketIds.map((id) => ({ id })) },
+    teams: { set: teamIds.map((id) => ({ id })) },
     campaigns: { deleteMany: {}, create: campaignIds.map((campaignId) => ({ campaignId })) },
   } });
   await audit(user.id, "opportunity.edit", "Opportunity", opportunityId);
@@ -300,10 +312,20 @@ export async function addRelationshipActivity(relationshipId: string, formData: 
   const type = z.enum(["EMAIL", "DM", "CALL", "MEETING", "NOTE", "FOLLOW_UP", "OTHER"]).parse(formData.get("type"));
   const summary = z.string().trim().min(1).max(5000).parse(formData.get("summary"));
   const nextStep = String(formData.get("nextStep") || "").trim() || null;
+  let campaignId = String(formData.get("campaignId") || "").trim() || null;
+  const activationId = String(formData.get("activationId") || "").trim() || null;
+  const executionType = z.enum(["ORGANIC_SOCIAL", "CREATOR_OUTREACH", "MEDIA_OUTREACH", "COMMUNITY", "PARTNERSHIP", "PAID", "PRODUCT_EVENT", "OTHER"]).optional().parse(String(formData.get("executionType") || "").trim() || undefined);
   const occurredAt = optionalDate(formData.get("occurredAt")) ?? new Date();
+  if (activationId) {
+    const activation = await prisma.campaignActivation.findUnique({ where: { id: activationId }, select: { campaignId: true } });
+    if (!activation) throw new Error("Activation not found");
+    if (campaignId && campaignId !== activation.campaignId) throw new Error("Activation does not belong to the selected campaign");
+    campaignId = activation.campaignId;
+  }
   await prisma.$transaction([
-    prisma.relationshipActivity.create({ data: { relationshipId, type, summary, nextStep, occurredAt } }),
+    prisma.relationshipActivity.create({ data: { relationshipId, type, summary, nextStep, occurredAt, campaignId, activationId, executionType } }),
     prisma.relationship.update({ where: { id: relationshipId }, data: { lastOutreachAt: type === "NOTE" ? undefined : occurredAt, nextFollowUpAt: optionalDate(formData.get("nextFollowUpAt")) } }),
+    ...(activationId ? [prisma.campaignActivation.update({ where: { id: activationId }, data: { relationships: { connect: { id: relationshipId } } } })] : []),
   ]);
   await audit(user.id, "relationship.activity", "Relationship", relationshipId);
   revalidatePath(`/command-center/relationships/${relationshipId}`);
@@ -327,6 +349,44 @@ export async function updateCampaignStatus(campaignId: string, formData: FormDat
   revalidatePath("/command-center/campaigns");
   revalidatePath(`/command-center/campaigns/${campaignId}`);
   revalidatePath("/command-center");
+}
+
+export async function updateCampaign(campaignId: string, formData: FormData) {
+  const user = await requireEditor();
+  const input = z.object({ name: text, programId: optionalText, description: optionalText, objective: optionalText, objectiveType: z.enum(["USER_ACQUISITION", "PARTICIPATION", "RETENTION", "BRAND_AWARENESS", "CREATOR_ACTIVATION", "MEDIA_EARNED", "PARTNERSHIP", "INDUSTRY_OUTREACH", "PRODUCT_VALIDATION", "OTHER"]), primaryAudience: optionalText, primaryCta: optionalText, coreMessage: optionalText, sport: optionalText, season: optionalText, notes: optionalText, successDefinition: optionalText, status: z.enum(["PLANNING", "ACTIVE", "PAUSED", "COMPLETE", "ARCHIVED"]) }).parse({
+    name: formData.get("name"), programId: String(formData.get("programId") ?? ""), description: String(formData.get("description") ?? ""), objective: String(formData.get("objective") ?? ""), objectiveType: formData.get("objectiveType"), primaryAudience: String(formData.get("primaryAudience") ?? ""), primaryCta: String(formData.get("primaryCta") ?? ""), coreMessage: String(formData.get("coreMessage") ?? ""), sport: String(formData.get("sport") ?? ""), season: String(formData.get("season") ?? ""), notes: String(formData.get("notes") ?? ""), successDefinition: String(formData.get("successDefinition") ?? ""), status: formData.get("status"),
+  });
+  await prisma.campaign.update({ where: { id: campaignId }, data: { ...input, active: input.status !== "ARCHIVED", startsAt: optionalDate(formData.get("startsAt")), endsAt: optionalDate(formData.get("endsAt")), kpis: lines(formData, "kpis"), brands: { set: ids(formData, "brandIds").map((id) => ({ id })) }, markets: { set: ids(formData, "marketIds").map((id) => ({ id })) }, teams: { set: ids(formData, "teamIds").map((id) => ({ id })) } } });
+  await audit(user.id, "campaign.edit", "Campaign", campaignId);
+  revalidatePath("/command-center/campaigns");
+  revalidatePath(`/command-center/campaigns/${campaignId}`);
+  redirect(`/command-center/campaigns/${campaignId}`);
+}
+
+export async function createActivation(campaignId: string, formData: FormData) {
+  const user = await requireEditor();
+  const input = z.object({ name: text, status: z.enum(["PLANNED", "READY", "ACTIVE", "COMPLETE", "PAUSED", "ARCHIVED"]), priority: z.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"]), marketId: optionalText, teamId: optionalText, eventId: optionalText, venueName: optionalText, sport: optionalText, season: optionalText, audienceSegment: optionalText, coreMessage: optionalText, callToAction: optionalText, objective: optionalText, slateLabel: optionalText, notes: optionalText }).parse({
+    name: formData.get("name"), status: formData.get("status"), priority: formData.get("priority"), marketId: String(formData.get("marketId") ?? ""), teamId: String(formData.get("teamId") ?? ""), eventId: String(formData.get("eventId") ?? ""), venueName: String(formData.get("venueName") ?? ""), sport: String(formData.get("sport") ?? ""), season: String(formData.get("season") ?? ""), audienceSegment: String(formData.get("audienceSegment") ?? ""), coreMessage: String(formData.get("coreMessage") ?? ""), callToAction: String(formData.get("callToAction") ?? ""), objective: String(formData.get("objective") ?? ""), slateLabel: String(formData.get("slateLabel") ?? ""), notes: String(formData.get("notes") ?? ""),
+  });
+  const weekRaw = String(formData.get("week") ?? "").trim();
+  const activation = await prisma.campaignActivation.create({ data: { ...input, campaignId, week: weekRaw ? z.coerce.number().int().min(1).max(99).parse(weekRaw) : null, startsAt: optionalDate(formData.get("startsAt")), endsAt: optionalDate(formData.get("endsAt")), brands: { connect: ids(formData, "brandIds").map((id) => ({ id })) }, relationships: { connect: ids(formData, "relationshipIds").map((id) => ({ id })) } } });
+  await audit(user.id, "activation.create", "CampaignActivation", activation.id, { campaignId });
+  revalidatePath("/command-center/campaigns");
+  revalidatePath(`/command-center/campaigns/${campaignId}`);
+  redirect(`/command-center/campaigns/${campaignId}/activations/${activation.id}`);
+}
+
+export async function updateActivation(activationId: string, formData: FormData) {
+  const user = await requireEditor();
+  const input = z.object({ name: text, status: z.enum(["PLANNED", "READY", "ACTIVE", "COMPLETE", "PAUSED", "ARCHIVED"]), priority: z.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"]), marketId: optionalText, teamId: optionalText, eventId: optionalText, venueName: optionalText, sport: optionalText, season: optionalText, audienceSegment: optionalText, coreMessage: optionalText, callToAction: optionalText, objective: optionalText, slateLabel: optionalText, notes: optionalText }).parse({
+    name: formData.get("name"), status: formData.get("status"), priority: formData.get("priority"), marketId: String(formData.get("marketId") ?? ""), teamId: String(formData.get("teamId") ?? ""), eventId: String(formData.get("eventId") ?? ""), venueName: String(formData.get("venueName") ?? ""), sport: String(formData.get("sport") ?? ""), season: String(formData.get("season") ?? ""), audienceSegment: String(formData.get("audienceSegment") ?? ""), coreMessage: String(formData.get("coreMessage") ?? ""), callToAction: String(formData.get("callToAction") ?? ""), objective: String(formData.get("objective") ?? ""), slateLabel: String(formData.get("slateLabel") ?? ""), notes: String(formData.get("notes") ?? ""),
+  });
+  const weekRaw = String(formData.get("week") ?? "").trim();
+  const activation = await prisma.campaignActivation.update({ where: { id: activationId }, data: { ...input, week: weekRaw ? z.coerce.number().int().min(1).max(99).parse(weekRaw) : null, startsAt: optionalDate(formData.get("startsAt")), endsAt: optionalDate(formData.get("endsAt")), brands: { set: ids(formData, "brandIds").map((id) => ({ id })) }, relationships: { set: ids(formData, "relationshipIds").map((id) => ({ id })) } }, select: { campaignId: true } });
+  await audit(user.id, "activation.edit", "CampaignActivation", activationId);
+  revalidatePath(`/command-center/campaigns/${activation.campaignId}`);
+  revalidatePath(`/command-center/campaigns/${activation.campaignId}/activations/${activationId}`);
+  redirect(`/command-center/campaigns/${activation.campaignId}/activations/${activationId}`);
 }
 
 export async function upsertSocialAccount(brandId: string, formData: FormData) {
