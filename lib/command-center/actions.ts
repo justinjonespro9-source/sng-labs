@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireCommandCenterUser } from "@/lib/auth/session";
+import { assertContentTransition, canDeleteContent, canDeleteOpportunity, hasSubstantiveContentChange, statusAfterContentEdit, type ContentStatus } from "@/lib/command-center/content-workflow";
 import { prisma } from "@/lib/prisma";
 
 const text = z.string().trim().min(1).max(500);
@@ -24,8 +25,8 @@ function optionalDate(value: FormDataEntryValue | null) {
   return raw ? new Date(raw) : null;
 }
 
-async function audit(actorId: string, action: string, entityType: string, entityId: string) {
-  await prisma.auditEvent.create({ data: { actorId, action, entityType, entityId } });
+async function audit(actorId: string, action: string, entityType: string, entityId: string, metadata?: Record<string, string | number | boolean | null>) {
+  await prisma.auditEvent.create({ data: { actorId, action, entityType, entityId, metadata } });
 }
 
 export async function createMarket(formData: FormData) {
@@ -123,7 +124,44 @@ export async function updateOpportunityStatus(opportunityId: string, formData: F
   const user = await requireEditor();
   const status = z.enum(["NEW", "REVIEWED", "DEVELOPING", "QUEUED", "COMPLETE", "NO_POST", "DISMISSED"]).parse(formData.get("status"));
   await prisma.opportunity.update({ where: { id: opportunityId }, data: { status, noPostRationale: status === "NO_POST" ? String(formData.get("noPostRationale") || "Not worth publishing now") : undefined } });
-  await audit(user.id, "opportunity.status", "Opportunity", opportunityId);
+  await audit(user.id, "opportunity.status", "Opportunity", opportunityId, { status });
+  revalidatePath("/command-center/opportunities");
+  revalidatePath("/command-center");
+}
+
+export async function updateOpportunity(opportunityId: string, formData: FormData) {
+  const user = await requireEditor();
+  const input = z.object({ title: text, summary: z.string().trim().min(1).max(5000), whyItMatters: optionalText, sourceLabel: optionalText, actionRecommendation: optionalText, status: z.enum(["NEW", "REVIEWED", "DEVELOPING", "QUEUED", "COMPLETE", "NO_POST", "DISMISSED"]) }).parse({
+    title: formData.get("title"), summary: formData.get("summary"), whyItMatters: String(formData.get("whyItMatters") ?? ""), sourceLabel: String(formData.get("sourceLabel") ?? ""), actionRecommendation: String(formData.get("actionRecommendation") ?? ""), status: formData.get("status"),
+  });
+  const urgency = z.coerce.number().int().min(0).max(100).parse(formData.get("urgency") ?? 50);
+  const campaignIds = ids(formData, "campaignIds");
+  await prisma.opportunity.update({ where: { id: opportunityId }, data: {
+    ...input,
+    urgency,
+    recommendedAt: optionalDate(formData.get("recommendedAt")),
+    noPostRationale: input.status === "NO_POST" ? String(formData.get("noPostRationale") || "Not worth publishing now") : null,
+    markets: { set: ids(formData, "marketIds").map((id) => ({ id })) },
+    teams: { set: ids(formData, "teamIds").map((id) => ({ id })) },
+    campaigns: { deleteMany: {}, create: campaignIds.map((campaignId) => ({ campaignId })) },
+  } });
+  await audit(user.id, "opportunity.edit", "Opportunity", opportunityId);
+  revalidatePath("/command-center/opportunities");
+  revalidatePath(`/command-center/opportunities/${opportunityId}/edit`);
+  revalidatePath("/command-center");
+  redirect("/command-center/opportunities");
+}
+
+export async function deleteOpportunity(opportunityId: string) {
+  const user = await requireEditor();
+  await prisma.$transaction(async (tx) => {
+    const opportunity = await tx.opportunity.findUnique({ where: { id: opportunityId }, select: { angles: { select: { _count: { select: { drafts: true } } } } } });
+    if (!opportunity) throw new Error("Opportunity not found");
+    const contentCount = opportunity.angles.reduce((sum, angle) => sum + angle._count.drafts, 0);
+    if (!canDeleteOpportunity(contentCount)) throw new Error("This Opportunity has linked Content. Dismiss it instead of deleting it.");
+    await tx.opportunity.delete({ where: { id: opportunityId } });
+    await tx.auditEvent.create({ data: { actorId: user.id, action: "opportunity.delete", entityType: "Opportunity", entityId: opportunityId, metadata: { contentCount } } });
+  }, { isolationLevel: "Serializable" });
   revalidatePath("/command-center/opportunities");
   revalidatePath("/command-center");
 }
@@ -145,7 +183,7 @@ export async function createContentFromOpportunity(formData: FormData) {
       update: { objective: input.objective, hook: input.hook, rationale: input.rationale, suggestedVisual: input.visualBrief },
       create: { opportunityId: input.opportunityId, brandId: input.brandId, objective: input.objective, hook: input.hook, rationale: input.rationale, suggestedVisual: input.visualBrief },
     });
-    const created = await tx.contentDraft.create({ data: { brandAngleId: angle.id, socialAccountId: input.socialAccountId, body: input.body, callToAction: input.callToAction, visualBrief: input.visualBrief } });
+    const created = await tx.contentDraft.create({ data: { brandAngleId: angle.id, socialAccountId: input.socialAccountId, objective: input.objective, hook: input.hook, rationale: input.rationale, body: input.body, callToAction: input.callToAction, visualBrief: input.visualBrief } });
     await tx.opportunity.update({ where: { id: input.opportunityId }, data: { status: "DEVELOPING" } });
     await tx.auditEvent.create({ data: { actorId: user.id, action: "content.create", entityType: "ContentDraft", entityId: created.id } });
     return created;
@@ -156,11 +194,70 @@ export async function createContentFromOpportunity(formData: FormData) {
 export async function updateDraftStatus(draftId: string, formData: FormData) {
   const user = await requireEditor();
   const status = z.enum(["DRAFT", "NEEDS_REVIEW", "REVISION_REQUESTED", "APPROVED", "REJECTED", "ARCHIVED"]).parse(formData.get("status"));
+  const comment = String(formData.get("comment") || "").trim() || null;
+  if (status === "REVISION_REQUESTED" && !comment) throw new Error("Revision notes are required");
   await prisma.$transaction(async (tx) => {
+    const current = await tx.contentDraft.findUnique({ where: { id: draftId }, select: { status: true, publication: { select: { id: true } } } });
+    if (!current) throw new Error("Content not found");
+    assertContentTransition(current.status as ContentStatus, status);
+    const action = status === "NEEDS_REVIEW"
+      ? current.status === "REVISION_REQUESTED" ? "content.resubmit_review" : "content.submit_review"
+      : `content.${status.toLowerCase()}`;
     await tx.contentDraft.update({ where: { id: draftId }, data: { status } });
-    if (["APPROVED", "REVISION_REQUESTED", "REJECTED"].includes(status)) await tx.approval.create({ data: { draftId, reviewerId: user.id, decision: status as "APPROVED" | "REVISION_REQUESTED" | "REJECTED", comment: String(formData.get("comment") || "") || null } });
+    if (status === "ARCHIVED" && current.publication) await tx.publication.update({ where: { draftId }, data: { status: "CANCELLED" } });
+    if (["APPROVED", "REVISION_REQUESTED", "REJECTED"].includes(status)) await tx.approval.create({ data: { draftId, reviewerId: user.id, decision: status as "APPROVED" | "REVISION_REQUESTED" | "REJECTED", comment } });
+    await tx.auditEvent.create({ data: { actorId: user.id, action, entityType: "ContentDraft", entityId: draftId, metadata: { previousStatus: current.status, nextStatus: status, ...(comment ? { comment } : {}) } } });
   });
-  await audit(user.id, `content.${status.toLowerCase()}`, "ContentDraft", draftId);
+  revalidatePath("/command-center/queue");
+  revalidatePath("/command-center");
+}
+
+export async function updateContentDraft(draftId: string, formData: FormData) {
+  const user = await requireEditor();
+  const input = z.object({ brandId: text, objective: text, hook: text, rationale: text, body: z.string().trim().min(1).max(20000), callToAction: optionalText, visualBrief: optionalText, socialAccountId: optionalText }).parse({
+    brandId: formData.get("brandId"), objective: formData.get("objective"), hook: formData.get("hook"), rationale: formData.get("rationale"), body: formData.get("body"), callToAction: String(formData.get("callToAction") ?? ""), visualBrief: String(formData.get("visualBrief") ?? ""), socialAccountId: String(formData.get("socialAccountId") ?? ""),
+  });
+  const scheduledFor = optionalDate(formData.get("scheduledFor"));
+  await prisma.$transaction(async (tx) => {
+    const current = await tx.contentDraft.findUnique({ where: { id: draftId }, include: { brandAngle: true, socialAccount: true, publication: true } });
+    if (!current) throw new Error("Content not found");
+    const brand = await tx.brand.findFirst({ where: { id: input.brandId, active: true }, select: { id: true } });
+    if (!brand) throw new Error("Choose an active canonical brand");
+    if (input.socialAccountId) {
+      const account = await tx.socialAccount.findFirst({ where: { id: input.socialAccountId, brandId: input.brandId, connectionStatus: "CONNECTED" }, select: { id: true } });
+      if (!account) throw new Error("Choose a connected account owned by the selected brand");
+    }
+    const nextSubstantive = { brandId: input.brandId, objective: input.objective, hook: input.hook, rationale: input.rationale, body: input.body, visualBrief: input.visualBrief, callToAction: input.callToAction };
+    const substantiveChange = hasSubstantiveContentChange({ brandId: current.brandAngle.brandId, objective: current.objective, hook: current.hook, rationale: current.rationale, body: current.body, visualBrief: current.visualBrief, callToAction: current.callToAction }, nextSubstantive);
+    const nextStatus = statusAfterContentEdit(current.status as ContentStatus, substantiveChange);
+    let brandAngleId = current.brandAngleId;
+    if (current.brandAngle.brandId !== input.brandId) {
+      const angle = await tx.brandAngle.upsert({ where: { opportunityId_brandId: { opportunityId: current.brandAngle.opportunityId, brandId: input.brandId } }, update: {}, create: { opportunityId: current.brandAngle.opportunityId, brandId: input.brandId, objective: input.objective, hook: input.hook, rationale: input.rationale, suggestedVisual: input.visualBrief } });
+      brandAngleId = angle.id;
+    }
+    const approvalInvalidated = nextStatus === "NEEDS_REVIEW" && ["APPROVED", "READY"].includes(current.status);
+    await tx.contentDraft.update({ where: { id: draftId }, data: { brandAngleId, objective: input.objective, hook: input.hook, rationale: input.rationale, body: input.body, visualBrief: input.visualBrief, callToAction: input.callToAction, socialAccountId: input.socialAccountId, scheduledFor: approvalInvalidated ? null : scheduledFor, status: nextStatus } });
+    if (current.publication) {
+      if (approvalInvalidated) await tx.publication.update({ where: { draftId }, data: { status: "CANCELLED", scheduledFor: null } });
+      else if (nextStatus === "READY" && input.socialAccountId && scheduledFor) await tx.publication.update({ where: { draftId }, data: { socialAccountId: input.socialAccountId, scheduledFor, status: "PLANNED" } });
+    }
+    await tx.auditEvent.create({ data: { actorId: user.id, action: "content.edit", entityType: "ContentDraft", entityId: draftId, metadata: { substantiveChange, approvalInvalidated, previousStatus: current.status, nextStatus } } });
+  });
+  revalidatePath("/command-center/queue");
+  revalidatePath(`/command-center/queue/${draftId}/edit`);
+  revalidatePath("/command-center");
+  redirect(`/command-center/queue?updated=${draftId}`);
+}
+
+export async function deleteContentDraft(draftId: string) {
+  const user = await requireEditor();
+  await prisma.$transaction(async (tx) => {
+    const draft = await tx.contentDraft.findUnique({ where: { id: draftId }, select: { status: true, publication: { select: { id: true } } } });
+    if (!draft) throw new Error("Content not found");
+    if (!canDeleteContent(draft.status as ContentStatus, Boolean(draft.publication))) throw new Error("Only unscheduled Draft content can be deleted. Archive this item instead.");
+    await tx.contentDraft.delete({ where: { id: draftId } });
+    await tx.auditEvent.create({ data: { actorId: user.id, action: "content.delete", entityType: "ContentDraft", entityId: draftId } });
+  });
   revalidatePath("/command-center/queue");
   revalidatePath("/command-center");
 }
@@ -170,11 +267,30 @@ export async function scheduleDraft(draftId: string, formData: FormData) {
   const socialAccountId = text.parse(formData.get("socialAccountId"));
   const scheduledFor = optionalDate(formData.get("scheduledFor"));
   if (!scheduledFor) throw new Error("A publish time is required");
-  await prisma.$transaction([
-    prisma.contentDraft.update({ where: { id: draftId }, data: { status: "READY", socialAccountId, scheduledFor } }),
-    prisma.publication.upsert({ where: { draftId }, update: { socialAccountId, scheduledFor, status: "PLANNED" }, create: { draftId, socialAccountId, scheduledFor } }),
-  ]);
-  await audit(user.id, "content.schedule", "ContentDraft", draftId);
+  await prisma.$transaction(async (tx) => {
+    const draft = await tx.contentDraft.findUnique({ where: { id: draftId }, include: { brandAngle: { select: { brandId: true } } } });
+    if (!draft) throw new Error("Content not found");
+    assertContentTransition(draft.status as ContentStatus, "READY");
+    const account = await tx.socialAccount.findFirst({ where: { id: socialAccountId, brandId: draft.brandAngle.brandId, connectionStatus: "CONNECTED" }, select: { id: true } });
+    if (!account) throw new Error("A connected social account for this brand is required");
+    await tx.contentDraft.update({ where: { id: draftId }, data: { status: "READY", socialAccountId, scheduledFor } });
+    await tx.publication.upsert({ where: { draftId }, update: { socialAccountId, scheduledFor, status: "PLANNED" }, create: { draftId, socialAccountId, scheduledFor } });
+    await tx.auditEvent.create({ data: { actorId: user.id, action: "content.schedule", entityType: "ContentDraft", entityId: draftId, metadata: { scheduledFor: scheduledFor.toISOString() } } });
+  });
+  revalidatePath("/command-center/queue");
+  revalidatePath("/command-center");
+}
+
+export async function unscheduleDraft(draftId: string) {
+  const user = await requireEditor();
+  await prisma.$transaction(async (tx) => {
+    const draft = await tx.contentDraft.findUnique({ where: { id: draftId }, select: { status: true, publication: { select: { id: true } } } });
+    if (!draft) throw new Error("Content not found");
+    assertContentTransition(draft.status as ContentStatus, "APPROVED");
+    await tx.contentDraft.update({ where: { id: draftId }, data: { status: "APPROVED", scheduledFor: null } });
+    if (draft.publication) await tx.publication.update({ where: { draftId }, data: { status: "CANCELLED", scheduledFor: null } });
+    await tx.auditEvent.create({ data: { actorId: user.id, action: "content.unschedule", entityType: "ContentDraft", entityId: draftId } });
+  });
   revalidatePath("/command-center/queue");
   revalidatePath("/command-center");
 }

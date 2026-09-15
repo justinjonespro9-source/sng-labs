@@ -319,6 +319,9 @@ model ContentDraft {
   brandAngleId    String
   socialAccountId String?
   status          DraftStatus    @default(DRAFT)
+  objective       String
+  hook            String
+  rationale       String
   body            String         @db.Text
   visualBrief     String?        @db.Text
   callToAction    String?
