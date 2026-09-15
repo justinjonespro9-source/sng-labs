@@ -234,38 +234,50 @@ model VerificationToken {
 }
 
 model Brand {
-  id                  String               @id @default(cuid())
-  key                 String               @unique
-  name                String
-  shortName           String?
-  kind                BrandKind
-  description         String
-  purpose             String?
-  coreProposition     String?
-  audience            String
-  voice               String
-  primaryCtas         String[]             @default([])
-  relevantUrls        String[]             @default([])
-  terminology         Json?
-  objectives          String[]
-  contentPillars      String[]             @default([])
-  preferredContent    String[]
-  prohibitedContent   String[]
-  callToActionRules   String
-  visualDirection     String
-  defaultCadenceNotes String
-  active              Boolean              @default(true)
-  socialAccounts      SocialAccount[]
-  angles              BrandAngle[]
-  metricSnapshots     MetricSnapshot[]
-  teams               Team[]               @relation("BrandTeams")
-  campaigns           Campaign[]           @relation("BrandCampaigns")
-  organizations       Organization[]       @relation("BrandOrganizations")
-  relationships       Relationship[]       @relation("BrandRelationships")
-  growthPrograms      GrowthProgram[]      @relation("BrandGrowthPrograms")
-  activations         CampaignActivation[] @relation("ActivationBrands")
-  createdAt           DateTime             @default(now())
-  updatedAt           DateTime             @updatedAt
+  id                      String               @id @default(cuid())
+  key                     String               @unique
+  name                    String
+  shortName               String?
+  kind                    BrandKind
+  description             String
+  purpose                 String?
+  corePromise             String?
+  coreProposition         String?
+  audience                String
+  secondaryAudiences      String[]             @default([])
+  distributionAudiences   String[]             @default([])
+  jobsToBeDone            String[]             @default([])
+  voice                   String
+  voiceTraits             String[]             @default([])
+  communicationPatterns   String[]             @default([])
+  primaryCtas             String[]             @default([])
+  relevantUrls            String[]             @default([])
+  terminology             Json?
+  objectives              String[]
+  contentPillars          String[]             @default([])
+  preferredContent        String[]
+  prohibitedContent       String[]
+  factualRequirements     String[]             @default([])
+  affiliationRestrictions String[]             @default([])
+  contentModes            Json?
+  aiOperatingInstructions String[]             @default([])
+  brandBrainVersion       Int?
+  brandBrainConfiguredAt  DateTime?
+  callToActionRules       String
+  visualDirection         String
+  defaultCadenceNotes     String
+  active                  Boolean              @default(true)
+  socialAccounts          SocialAccount[]
+  angles                  BrandAngle[]
+  metricSnapshots         MetricSnapshot[]
+  teams                   Team[]               @relation("BrandTeams")
+  campaigns               Campaign[]           @relation("BrandCampaigns")
+  organizations           Organization[]       @relation("BrandOrganizations")
+  relationships           Relationship[]       @relation("BrandRelationships")
+  growthPrograms          GrowthProgram[]      @relation("BrandGrowthPrograms")
+  activations             CampaignActivation[] @relation("ActivationBrands")
+  createdAt               DateTime             @default(now())
+  updatedAt               DateTime             @updatedAt
 }
 
 model SocialAccount {
