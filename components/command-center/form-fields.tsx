@@ -18,6 +18,6 @@ export function SubmitButton({ children }: { children: React.ReactNode }) {
   return <button className="rounded-lg bg-[#b8d4c8] px-4 py-2.5 text-sm font-semibold text-[#07100c] hover:bg-white" type="submit">{children}</button>;
 }
 
-export function CheckboxGroup({ name, items }: { name: string; items: { id: string; name: string }[] }) {
-  return <div className="flex flex-wrap gap-2">{items.map((item) => <label key={item.id} className="flex items-center gap-2 rounded-full border border-white/10 px-3 py-1.5 text-xs text-[#b8bcba]"><input name={name} type="checkbox" value={item.id} />{item.name}</label>)}</div>;
+export function CheckboxGroup({ name, items, selectedIds = [] }: { name: string; items: { id: string; name: string }[]; selectedIds?: string[] }) {
+  return <div className="flex flex-wrap gap-2">{items.map((item) => <label key={item.id} className="flex items-center gap-2 rounded-full border border-white/10 px-3 py-1.5 text-xs text-[#b8bcba]"><input name={name} type="checkbox" value={item.id} defaultChecked={selectedIds.includes(item.id)} />{item.name}</label>)}</div>;
 }
