@@ -1,5 +1,6 @@
-import { PrismaClient } from "@prisma/client";
+import { Prisma, PrismaClient } from "@prisma/client";
 import { brandDefinitions } from "../lib/command-center/brand-definitions";
+import { shouldInitializeBrandBrain, stadiumSlopBrandBrain } from "../lib/command-center/brand-brain";
 import { campaignDefinitions, growthProgramDefinitions } from "../lib/command-center/campaign-definitions";
 
 const prisma = new PrismaClient();
@@ -44,6 +45,39 @@ async function main() {
   const seededBrands = await prisma.brand.findMany({ where: { key: { in: brandDefinitions.map((brand) => brand.key) } }, select: { key: true, active: true } });
   if (seededBrands.length !== brandDefinitions.length) throw new Error(`Expected ${brandDefinitions.length} canonical brands; found ${seededBrands.length}`);
   console.log(`Verified ${seededBrands.length} canonical SNG brand profiles (${seededBrands.filter((brand) => brand.active).length} active).`);
+
+  const stadiumSlop = await prisma.brand.findUnique({ where: { key: "stadium-slop" } });
+  if (!stadiumSlop) throw new Error("Canonical Stadium Slop brand is missing");
+  if (shouldInitializeBrandBrain(stadiumSlop.brandBrainVersion)) {
+    await prisma.brand.update({
+      where: { id: stadiumSlop.id },
+      data: {
+        purpose: stadiumSlopBrandBrain.purpose,
+        corePromise: stadiumSlopBrandBrain.corePromise,
+        coreProposition: stadiumSlopBrandBrain.coreProposition,
+        audience: stadiumSlopBrandBrain.audience,
+        secondaryAudiences: stadiumSlopBrandBrain.secondaryAudiences,
+        distributionAudiences: stadiumSlopBrandBrain.distributionAudiences,
+        jobsToBeDone: stadiumSlopBrandBrain.jobsToBeDone,
+        contentPillars: stadiumSlopBrandBrain.contentPillars,
+        voice: stadiumSlopBrandBrain.voice,
+        voiceTraits: stadiumSlopBrandBrain.voiceTraits,
+        communicationPatterns: stadiumSlopBrandBrain.communicationPatterns,
+        contentModes: stadiumSlopBrandBrain.contentModes as Prisma.InputJsonValue,
+        prohibitedContent: stadiumSlopBrandBrain.prohibitedContent,
+        factualRequirements: stadiumSlopBrandBrain.factualRequirements,
+        affiliationRestrictions: stadiumSlopBrandBrain.affiliationRestrictions,
+        aiOperatingInstructions: stadiumSlopBrandBrain.aiOperatingInstructions,
+        primaryCtas: ["Rate what you ate."],
+        callToActionRules: "Use the supported attendee, creator, media, vendor, or partner CTA from context. Do not default to download-our-app language.",
+        brandBrainVersion: 1,
+        brandBrainConfiguredAt: new Date(),
+      },
+    });
+    console.log("Configured canonical Stadium Slop Brand Brain v1.");
+  } else {
+    console.log(`Preserved operator-managed Stadium Slop Brand Brain v${stadiumSlop.brandBrainVersion}.`);
+  }
 
   const brands = await prisma.brand.findMany();
   const brandIds = Object.fromEntries(brands.map((brand) => [brand.key, brand.id]));
