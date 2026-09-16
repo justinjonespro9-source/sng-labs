@@ -1,6 +1,6 @@
 import { Prisma, PrismaClient } from "@prisma/client";
 import { brandDefinitions } from "../lib/command-center/brand-definitions";
-import { rankEyeQBrandBrain, shouldInitializeBrandBrain, stadiumSlopBrandBrain, teamM8tesBrandBrain } from "../lib/command-center/brand-brain";
+import { fantasyTrackBrandBrain, rankEyeQBrandBrain, shouldInitializeBrandBrain, stadiumSlopBrandBrain, teamM8tesBrandBrain } from "../lib/command-center/brand-brain";
 import { campaignDefinitions, growthProgramDefinitions } from "../lib/command-center/campaign-definitions";
 
 const prisma = new PrismaClient();
@@ -143,6 +143,39 @@ async function main() {
     console.log("Configured canonical RankEyeQ Brand Brain v1.");
   } else {
     console.log(`Preserved operator-managed RankEyeQ Brand Brain v${rankEyeQ.brandBrainVersion}.`);
+  }
+
+  const fantasyTrack = await prisma.brand.findUnique({ where: { key: "fantasytrack" } });
+  if (!fantasyTrack) throw new Error("Canonical FantasyTrack brand is missing");
+  if (shouldInitializeBrandBrain(fantasyTrack.brandBrainVersion)) {
+    await prisma.brand.update({
+      where: { id: fantasyTrack.id },
+      data: {
+        purpose: fantasyTrackBrandBrain.purpose,
+        corePromise: fantasyTrackBrandBrain.corePromise,
+        coreProposition: fantasyTrackBrandBrain.coreProposition,
+        audience: fantasyTrackBrandBrain.audience,
+        secondaryAudiences: fantasyTrackBrandBrain.secondaryAudiences,
+        distributionAudiences: fantasyTrackBrandBrain.distributionAudiences,
+        jobsToBeDone: fantasyTrackBrandBrain.jobsToBeDone,
+        contentPillars: fantasyTrackBrandBrain.contentPillars,
+        voice: fantasyTrackBrandBrain.voice,
+        voiceTraits: fantasyTrackBrandBrain.voiceTraits,
+        communicationPatterns: fantasyTrackBrandBrain.communicationPatterns,
+        contentModes: fantasyTrackBrandBrain.contentModes as Prisma.InputJsonValue,
+        prohibitedContent: fantasyTrackBrandBrain.prohibitedContent,
+        factualRequirements: fantasyTrackBrandBrain.factualRequirements,
+        affiliationRestrictions: fantasyTrackBrandBrain.affiliationRestrictions,
+        aiOperatingInstructions: fantasyTrackBrandBrain.aiOperatingInstructions,
+        primaryCtas: ["Pick your runner.", "Who finishes first?"],
+        callToActionRules: "Lead consumers with the simple whole-field position race. Use the self-pricing-field thesis only for relevant operator, partner, investor, or industry audiences, and use responsible language whenever wagering, pricing, payouts, or risk are involved.",
+        brandBrainVersion: 1,
+        brandBrainConfiguredAt: new Date(),
+      },
+    });
+    console.log("Configured canonical FantasyTrack Brand Brain v1.");
+  } else {
+    console.log(`Preserved operator-managed FantasyTrack Brand Brain v${fantasyTrack.brandBrainVersion}.`);
   }
 
   const brands = await prisma.brand.findMany();
