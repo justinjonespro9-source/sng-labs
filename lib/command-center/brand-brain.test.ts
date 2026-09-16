@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { contentModesToText, eyezOnThePrizeBrandBrain, fantasyTrackBrandBrain, handicapHeroBrandBrain, hasConfiguredBrandBrain, parseContentModes, parseLines, rankEyeQBrandBrain, shouldInitializeBrandBrain, stadiumSlopBrandBrain, teamM8tesBrandBrain } from "./brand-brain";
+import { contentModesToText, eyezOnThePrizeBrandBrain, fantasyTrackBrandBrain, handicapHeroBrandBrain, hasConfiguredBrandBrain, parseContentModes, parseLines, rankEyeQBrandBrain, shouldInitializeBrandBrain, sngLabsBrandBrain, stadiumSlopBrandBrain, teamM8tesBrandBrain } from "./brand-brain";
 
 describe("Brand Brain", () => {
   it("uses an explicit configuration state", () => {
@@ -19,6 +19,16 @@ describe("Brand Brain", () => {
   it("round-trips editable content modes", () => {
     const modes = parseContentModes("Acquire | Get an attendee to participate | At the game? Rate what you ate.\nOutreach | Address distribution audiences");
     expect(contentModesToText(modes)).toBe("Acquire | Get an attendee to participate | At the game? Rate what you ate.\nOutreach | Address distribution audiences");
+  });
+
+  it("keeps SNG LABS above the portfolio and allows Do Not Post", () => {
+    expect(sngLabsBrandBrain.corePromise).toBe("Transforming Fans from Spectators into Participants.");
+    expect(sngLabsBrandBrain.coreProposition).toContain("sports-tech product studio");
+    expect(sngLabsBrandBrain.contentPillars).toEqual(["From Spectator to Participant", "Build New Ways to Play", "Product Thesis", "Founder / Builder", "Portfolio / Lab", "Partnerships / What Could This Become?"]);
+    expect(sngLabsBrandBrain.contentModes.map((mode) => mode.name)).toEqual(["Company / Portfolio", "Product Thesis", "Founder / Builder", "Build in Public", "Milestone", "Partnership", "Industry / Category", "Media / Press", "Investor / Strategic", "Outreach", "Do Not Post"]);
+    expect(sngLabsBrandBrain.aiOperatingInstructions).toContain("Never automatically create SNG content because a product has an opportunity");
+    expect(sngLabsBrandBrain.aiOperatingInstructions).toContain("Remember: SNG LABS does not narrate the portfolio. It tells the story behind the portfolio.");
+    expect(sngLabsBrandBrain.prohibitedContent).toContain("Automatic reposting or rewriting of routine product content");
   });
 
   it("contains the canonical Stadium Slop strategy without fabricated results", () => {
