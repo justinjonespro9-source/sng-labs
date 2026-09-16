@@ -183,20 +183,38 @@ enum GrowthEventType {
   OTHER
 }
 
+enum GenerationRecommendation {
+  CREATE
+  DO_NOT_POST
+  NEEDS_MORE_CONTEXT
+}
+
+enum GenerationRunStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+}
+
+enum OperatorContextTrust {
+  OPERATOR_SUPPLIED
+  HYPOTHETICAL
+}
+
 model User {
-  id            String         @id @default(cuid())
-  name          String?
-  email         String?        @unique
-  emailVerified DateTime?
-  image         String?
-  role          UserRole       @default(VIEWER)
-  accounts      Account[]
-  sessions      Session[]
-  approvals     Approval[]
-  auditEvents   AuditEvent[]
-  relationships Relationship[]
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
+  id             String          @id @default(cuid())
+  name           String?
+  email          String?         @unique
+  emailVerified  DateTime?
+  image          String?
+  role           UserRole        @default(VIEWER)
+  accounts       Account[]
+  sessions       Session[]
+  approvals      Approval[]
+  auditEvents    AuditEvent[]
+  relationships  Relationship[]
+  generationRuns GenerationRun[]
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
 }
 
 model Account {
@@ -276,6 +294,7 @@ model Brand {
   relationships           Relationship[]       @relation("BrandRelationships")
   growthPrograms          GrowthProgram[]      @relation("BrandGrowthPrograms")
   activations             CampaignActivation[] @relation("ActivationBrands")
+  generationRuns          GenerationRun[]
   createdAt               DateTime             @default(now())
   updatedAt               DateTime             @updatedAt
 }
@@ -344,6 +363,7 @@ model Opportunity {
   campaigns            CampaignOpportunity[]
   markets              Market[]              @relation("MarketOpportunities")
   teams                Team[]                @relation("TeamOpportunities")
+  generationRuns       GenerationRun[]
   createdAt            DateTime              @default(now())
   updatedAt            DateTime              @updatedAt
 
@@ -392,6 +412,7 @@ model ContentDraft {
   socialAccount   SocialAccount? @relation(fields: [socialAccountId], references: [id], onDelete: SetNull)
   approvals       Approval[]
   publication     Publication?
+  generationRun   GenerationRun?
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
 
@@ -458,6 +479,7 @@ model Campaign {
   relationships     Relationship[]
   activities        RelationshipActivity[]
   attribution       CampaignAttribution[]
+  generationRuns    GenerationRun[]
   createdAt         DateTime               @default(now())
   updatedAt         DateTime               @updatedAt
 
@@ -507,6 +529,7 @@ model CampaignActivation {
   relationships   Relationship[]         @relation("ActivationRelationships")
   opportunities   Opportunity[]
   activities      RelationshipActivity[]
+  generationRuns  GenerationRun[]
   createdAt       DateTime               @default(now())
   updatedAt       DateTime               @updatedAt
 
@@ -632,6 +655,7 @@ model Relationship {
   relevantBrands Brand[]                @relation("BrandRelationships")
   activations    CampaignActivation[]   @relation("ActivationRelationships")
   activities     RelationshipActivity[]
+  generationRuns GenerationRun[]
   createdAt      DateTime               @default(now())
   updatedAt      DateTime               @updatedAt
 
@@ -754,4 +778,40 @@ model AuditEvent {
 
   @@index([entityType, entityId, createdAt])
   @@index([actorId, createdAt])
+}
+
+model GenerationRun {
+  id                   String                    @id @default(cuid())
+  createdById          String?
+  brandId              String?
+  campaignId           String?
+  activationId         String?
+  opportunityId        String?
+  relationshipId       String?
+  contentId            String?                   @unique
+  channel              String
+  audienceSegment      String?
+  operatorContext      String?                   @db.Text
+  operatorContextTrust OperatorContextTrust?
+  resolvedContext      Json
+  provider             String?
+  model                String?
+  generationVersion    String
+  recommendation       GenerationRecommendation?
+  structuredOutput     Json?
+  status               GenerationRunStatus       @default(PENDING)
+  errorMessage         String?                   @db.Text
+  createdBy            User?                     @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  brand                Brand?                    @relation(fields: [brandId], references: [id], onDelete: SetNull)
+  campaign             Campaign?                 @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  activation           CampaignActivation?       @relation(fields: [activationId], references: [id], onDelete: SetNull)
+  opportunity          Opportunity?              @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+  relationship         Relationship?             @relation(fields: [relationshipId], references: [id], onDelete: SetNull)
+  content              ContentDraft?             @relation(fields: [contentId], references: [id], onDelete: SetNull)
+  createdAt            DateTime                  @default(now())
+  updatedAt            DateTime                  @updatedAt
+
+  @@index([createdAt])
+  @@index([brandId, createdAt])
+  @@index([status, createdAt])
 }
