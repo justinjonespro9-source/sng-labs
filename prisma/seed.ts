@@ -1,6 +1,6 @@
 import { Prisma, PrismaClient } from "@prisma/client";
 import { brandDefinitions } from "../lib/command-center/brand-definitions";
-import { eyezOnThePrizeBrandBrain, fantasyTrackBrandBrain, handicapHeroBrandBrain, rankEyeQBrandBrain, shouldInitializeBrandBrain, stadiumSlopBrandBrain, teamM8tesBrandBrain } from "../lib/command-center/brand-brain";
+import { eyezOnThePrizeBrandBrain, fantasyTrackBrandBrain, handicapHeroBrandBrain, rankEyeQBrandBrain, shouldInitializeBrandBrain, sngLabsBrandBrain, stadiumSlopBrandBrain, teamM8tesBrandBrain } from "../lib/command-center/brand-brain";
 import { campaignDefinitions, growthProgramDefinitions } from "../lib/command-center/campaign-definitions";
 
 const prisma = new PrismaClient();
@@ -45,6 +45,39 @@ async function main() {
   const seededBrands = await prisma.brand.findMany({ where: { key: { in: brandDefinitions.map((brand) => brand.key) } }, select: { key: true, active: true } });
   if (seededBrands.length !== brandDefinitions.length) throw new Error(`Expected ${brandDefinitions.length} canonical brands; found ${seededBrands.length}`);
   console.log(`Verified ${seededBrands.length} canonical SNG brand profiles (${seededBrands.filter((brand) => brand.active).length} active).`);
+
+  const sngLabs = await prisma.brand.findUnique({ where: { key: "sng-labs" } });
+  if (!sngLabs) throw new Error("Canonical SNG LABS brand is missing");
+  if (shouldInitializeBrandBrain(sngLabs.brandBrainVersion)) {
+    await prisma.brand.update({
+      where: { id: sngLabs.id },
+      data: {
+        purpose: sngLabsBrandBrain.purpose,
+        corePromise: sngLabsBrandBrain.corePromise,
+        coreProposition: sngLabsBrandBrain.coreProposition,
+        audience: sngLabsBrandBrain.audience,
+        secondaryAudiences: sngLabsBrandBrain.secondaryAudiences,
+        distributionAudiences: sngLabsBrandBrain.distributionAudiences,
+        jobsToBeDone: sngLabsBrandBrain.jobsToBeDone,
+        contentPillars: sngLabsBrandBrain.contentPillars,
+        voice: sngLabsBrandBrain.voice,
+        voiceTraits: sngLabsBrandBrain.voiceTraits,
+        communicationPatterns: sngLabsBrandBrain.communicationPatterns,
+        contentModes: sngLabsBrandBrain.contentModes as Prisma.InputJsonValue,
+        prohibitedContent: sngLabsBrandBrain.prohibitedContent,
+        factualRequirements: sngLabsBrandBrain.factualRequirements,
+        affiliationRestrictions: sngLabsBrandBrain.affiliationRestrictions,
+        aiOperatingInstructions: sngLabsBrandBrain.aiOperatingInstructions,
+        primaryCtas: ["Start a conversation.", "Explore what we could build together."],
+        callToActionRules: "Do not force an immediate sales CTA into every story. Use a specific partnership, investment, media, collaboration, or follow-the-company CTA only when the trusted audience, Campaign, and opportunity context earn it.",
+        brandBrainVersion: 1,
+        brandBrainConfiguredAt: new Date(),
+      },
+    });
+    console.log("Configured canonical SNG LABS Brand Brain v1.");
+  } else {
+    console.log(`Preserved operator-managed SNG LABS Brand Brain v${sngLabs.brandBrainVersion}.`);
+  }
 
   const stadiumSlop = await prisma.brand.findUnique({ where: { key: "stadium-slop" } });
   if (!stadiumSlop) throw new Error("Canonical Stadium Slop brand is missing");
