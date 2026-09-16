@@ -44,6 +44,10 @@ Copy `.env.example` to `.env.local` and configure:
 - `AUTH_SECRET`: Auth.js encryption secret.
 - `AUTH_GOOGLE_ID` and `AUTH_GOOGLE_SECRET`: Google OAuth credentials.
 - `AUTH_ALLOWED_EMAILS`: comma-separated allowlist; the first address is the initial owner.
+- `OPENAI_API_KEY`: server-only credential used by AI Lab generation.
+- `AI_MODEL`: server-selected model used by AI Lab. No model is hard-coded in the application.
+
+If either AI variable is missing, AI Lab shows generation as unavailable without affecting the rest of the Command Center.
 
 Then run:
 
