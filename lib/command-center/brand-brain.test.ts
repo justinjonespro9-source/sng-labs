@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { contentModesToText, fantasyTrackBrandBrain, hasConfiguredBrandBrain, parseContentModes, parseLines, rankEyeQBrandBrain, shouldInitializeBrandBrain, stadiumSlopBrandBrain, teamM8tesBrandBrain } from "./brand-brain";
+import { contentModesToText, eyezOnThePrizeBrandBrain, fantasyTrackBrandBrain, hasConfiguredBrandBrain, parseContentModes, parseLines, rankEyeQBrandBrain, shouldInitializeBrandBrain, stadiumSlopBrandBrain, teamM8tesBrandBrain } from "./brand-brain";
 
 describe("Brand Brain", () => {
   it("uses an explicit configuration state", () => {
@@ -52,4 +52,15 @@ describe("Brand Brain", () => {
     expect(fantasyTrackBrandBrain.aiOperatingInstructions).toContain("Distinguish the simple consumer race story from the B2B self-pricing-field story");
     expect(fantasyTrackBrandBrain.prohibitedContent.some((rule) => rule.includes("Promises of profit"))).toBe(true);
   });
+
+  it("separates Eyez consumer simplicity from its commercial attention thesis", () => {
+    expect(eyezOnThePrizeBrandBrain.corePromise).toBe("Your Attention Is Worth Something.");
+    expect(eyezOnThePrizeBrandBrain.coreProposition).toContain("Watch → Entry → Drawing → Winner");
+    expect(eyezOnThePrizeBrandBrain.coreProposition).toContain("attention can become a transparent value exchange");
+    expect(eyezOnThePrizeBrandBrain.contentPillars).toEqual(["Attention Has Value", "Clear Exchange", "Verified Participation", "Transparent Outcome", "Prizes Worth Paying Attention To", "Attention → Participation"]);
+    expect(eyezOnThePrizeBrandBrain.contentModes.map((mode) => mode.name)).toEqual(["Acquire", "Explain", "Campaign / Prize", "Countdown / Scarcity", "Completion / Entry", "Drawing", "Winner / Proof", "Sponsor Story", "Industry / B2B", "Outreach"]);
+    expect(eyezOnThePrizeBrandBrain.aiOperatingInstructions).toContain("Keep consumer mechanics extremely simple: Watch → Entry → Drawing → Winner");
+    expect(eyezOnThePrizeBrandBrain.prohibitedContent.some((rule) => rule.includes("Fabricated sponsors"))).toBe(true);
+  });
 });
+
