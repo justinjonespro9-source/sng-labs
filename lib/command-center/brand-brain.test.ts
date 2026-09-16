@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { contentModesToText, eyezOnThePrizeBrandBrain, fantasyTrackBrandBrain, hasConfiguredBrandBrain, parseContentModes, parseLines, rankEyeQBrandBrain, shouldInitializeBrandBrain, stadiumSlopBrandBrain, teamM8tesBrandBrain } from "./brand-brain";
+import { contentModesToText, eyezOnThePrizeBrandBrain, fantasyTrackBrandBrain, handicapHeroBrandBrain, hasConfiguredBrandBrain, parseContentModes, parseLines, rankEyeQBrandBrain, shouldInitializeBrandBrain, stadiumSlopBrandBrain, teamM8tesBrandBrain } from "./brand-brain";
 
 describe("Brand Brain", () => {
   it("uses an explicit configuration state", () => {
@@ -42,6 +42,17 @@ describe("Brand Brain", () => {
     expect(rankEyeQBrandBrain.contentModes.map((mode) => mode.name)).toEqual(["Acquire", "Rank", "Challenge", "Results / Receipts", "Compare", "Report / Insight", "Reputation / Celebrate", "Outreach"]);
     expect(rankEyeQBrandBrain.aiOperatingInstructions).toContain("Distinguish submitted predictions, consensus, and actual results");
     expect(rankEyeQBrandBrain.prohibitedContent.some((rule) => rule.includes("sportsbook"))).toBe(true);
+  });
+
+  it("keeps Handicap Hero centered on confidence ordering and survival", () => {
+    expect(handicapHeroBrandBrain.corePromise).toBe("How deep can you go?");
+    expect(handicapHeroBrandBrain.coreProposition).toContain("Ordering is the game. Survival is the drama.");
+    expect(handicapHeroBrandBrain.coreProposition).toContain("Your picks aren't the challenge. Your confidence is.");
+    expect(handicapHeroBrandBrain.contentPillars).toEqual(["Rank Your Conviction", "Survive the Card", "The Order Matters", "Beat the Bots", "Perfect 8", "Receipts / Reputation"]);
+    expect(handicapHeroBrandBrain.contentModes.map((mode) => mode.name)).toEqual(["Acquire", "Build the Card", "Lock / Last Call", "Live Survival", "Results / Receipts", "Beat the Bots", "Perfect 8", "Streaks / Reputation", "Explain", "Outreach"]);
+    expect(handicapHeroBrandBrain.aiOperatingInstructions).toContain("Treat confidence ordering as the defining mechanic");
+    expect(handicapHeroBrandBrain.aiOperatingInstructions).toContain("Treat survival as the emotional engine");
+    expect(handicapHeroBrandBrain.prohibitedContent.some((rule) => rule.includes("Fabricated contests"))).toBe(true);
   });
 
   it("separates FantasyTrack's consumer race from its B2B pricing thesis", () => {
