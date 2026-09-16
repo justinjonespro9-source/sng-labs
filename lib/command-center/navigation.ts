@@ -1,6 +1,7 @@
 export const commandCenterNavigation = [
   { href: "/command-center", label: "Overview", key: "overview" },
   { href: "/command-center/opportunities", label: "Opportunity Feed", key: "opportunities" },
+  { href: "/command-center/ai-lab", label: "AI Lab", key: "ai-lab" },
   { href: "/command-center/queue", label: "Content Queue", key: "queue" },
   { href: "/command-center/calendar", label: "Calendar", key: "calendar" },
   { href: "/command-center/brands", label: "Brands", key: "brands" },
@@ -15,5 +16,5 @@ export const commandCenterNavigation = [
 ] as const;
 
 export const scaffoldSections = commandCenterNavigation.filter(
-  (item) => !["overview", "opportunities", "queue", "brands", "markets", "campaigns", "relationships"].includes(item.key),
+  (item) => !["overview", "opportunities", "ai-lab", "queue", "brands", "markets", "campaigns", "relationships"].includes(item.key),
 );
