@@ -1,6 +1,6 @@
 import { Prisma, PrismaClient } from "@prisma/client";
 import { brandDefinitions } from "../lib/command-center/brand-definitions";
-import { eyezOnThePrizeBrandBrain, fantasyTrackBrandBrain, rankEyeQBrandBrain, shouldInitializeBrandBrain, stadiumSlopBrandBrain, teamM8tesBrandBrain } from "../lib/command-center/brand-brain";
+import { eyezOnThePrizeBrandBrain, fantasyTrackBrandBrain, handicapHeroBrandBrain, rankEyeQBrandBrain, shouldInitializeBrandBrain, stadiumSlopBrandBrain, teamM8tesBrandBrain } from "../lib/command-center/brand-brain";
 import { campaignDefinitions, growthProgramDefinitions } from "../lib/command-center/campaign-definitions";
 
 const prisma = new PrismaClient();
@@ -143,6 +143,39 @@ async function main() {
     console.log("Configured canonical RankEyeQ Brand Brain v1.");
   } else {
     console.log(`Preserved operator-managed RankEyeQ Brand Brain v${rankEyeQ.brandBrainVersion}.`);
+  }
+
+  const handicapHero = await prisma.brand.findUnique({ where: { key: "handicap-hero" } });
+  if (!handicapHero) throw new Error("Canonical Handicap Hero brand is missing");
+  if (shouldInitializeBrandBrain(handicapHero.brandBrainVersion)) {
+    await prisma.brand.update({
+      where: { id: handicapHero.id },
+      data: {
+        purpose: handicapHeroBrandBrain.purpose,
+        corePromise: handicapHeroBrandBrain.corePromise,
+        coreProposition: handicapHeroBrandBrain.coreProposition,
+        audience: handicapHeroBrandBrain.audience,
+        secondaryAudiences: handicapHeroBrandBrain.secondaryAudiences,
+        distributionAudiences: handicapHeroBrandBrain.distributionAudiences,
+        jobsToBeDone: handicapHeroBrandBrain.jobsToBeDone,
+        contentPillars: handicapHeroBrandBrain.contentPillars,
+        voice: handicapHeroBrandBrain.voice,
+        voiceTraits: handicapHeroBrandBrain.voiceTraits,
+        communicationPatterns: handicapHeroBrandBrain.communicationPatterns,
+        contentModes: handicapHeroBrandBrain.contentModes as Prisma.InputJsonValue,
+        prohibitedContent: handicapHeroBrandBrain.prohibitedContent,
+        factualRequirements: handicapHeroBrandBrain.factualRequirements,
+        affiliationRestrictions: handicapHeroBrandBrain.affiliationRestrictions,
+        aiOperatingInstructions: handicapHeroBrandBrain.aiOperatingInstructions,
+        primaryCtas: ["How deep can you go?", "Build your card. Rank your conviction."],
+        callToActionRules: "Keep consumer participation free-to-play and focused on confidence ordering, survival, and measurable skill. Use actual contest timing and state, and tailor creator, media, operator, partner, and investor outreach separately.",
+        brandBrainVersion: 1,
+        brandBrainConfiguredAt: new Date(),
+      },
+    });
+    console.log("Configured canonical Handicap Hero Brand Brain v1.");
+  } else {
+    console.log(`Preserved operator-managed Handicap Hero Brand Brain v${handicapHero.brandBrainVersion}.`);
   }
 
   const fantasyTrack = await prisma.brand.findUnique({ where: { key: "fantasytrack" } });
