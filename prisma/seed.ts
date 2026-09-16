@@ -1,6 +1,6 @@
 import { Prisma, PrismaClient } from "@prisma/client";
 import { brandDefinitions } from "../lib/command-center/brand-definitions";
-import { fantasyTrackBrandBrain, rankEyeQBrandBrain, shouldInitializeBrandBrain, stadiumSlopBrandBrain, teamM8tesBrandBrain } from "../lib/command-center/brand-brain";
+import { eyezOnThePrizeBrandBrain, fantasyTrackBrandBrain, rankEyeQBrandBrain, shouldInitializeBrandBrain, stadiumSlopBrandBrain, teamM8tesBrandBrain } from "../lib/command-center/brand-brain";
 import { campaignDefinitions, growthProgramDefinitions } from "../lib/command-center/campaign-definitions";
 
 const prisma = new PrismaClient();
@@ -178,6 +178,39 @@ async function main() {
     console.log(`Preserved operator-managed FantasyTrack Brand Brain v${fantasyTrack.brandBrainVersion}.`);
   }
 
+  const eyezOnThePrize = await prisma.brand.findUnique({ where: { key: "eyez-on-the-prize" } });
+  if (!eyezOnThePrize) throw new Error("Canonical Eyez on the Prize brand is missing");
+  if (shouldInitializeBrandBrain(eyezOnThePrize.brandBrainVersion)) {
+    await prisma.brand.update({
+      where: { id: eyezOnThePrize.id },
+      data: {
+        purpose: eyezOnThePrizeBrandBrain.purpose,
+        corePromise: eyezOnThePrizeBrandBrain.corePromise,
+        coreProposition: eyezOnThePrizeBrandBrain.coreProposition,
+        audience: eyezOnThePrizeBrandBrain.audience,
+        secondaryAudiences: eyezOnThePrizeBrandBrain.secondaryAudiences,
+        distributionAudiences: eyezOnThePrizeBrandBrain.distributionAudiences,
+        jobsToBeDone: eyezOnThePrizeBrandBrain.jobsToBeDone,
+        contentPillars: eyezOnThePrizeBrandBrain.contentPillars,
+        voice: eyezOnThePrizeBrandBrain.voice,
+        voiceTraits: eyezOnThePrizeBrandBrain.voiceTraits,
+        communicationPatterns: eyezOnThePrizeBrandBrain.communicationPatterns,
+        contentModes: eyezOnThePrizeBrandBrain.contentModes as Prisma.InputJsonValue,
+        prohibitedContent: eyezOnThePrizeBrandBrain.prohibitedContent,
+        factualRequirements: eyezOnThePrizeBrandBrain.factualRequirements,
+        affiliationRestrictions: eyezOnThePrizeBrandBrain.affiliationRestrictions,
+        aiOperatingInstructions: eyezOnThePrizeBrandBrain.aiOperatingInstructions,
+        primaryCtas: ["Watch. Enter. See who wins."],
+        callToActionRules: "Use the real campaign action, eligibility, completion requirement, entry mechanics, and timing from trusted context. Keep consumer CTAs simple and tailor sponsor, creator, media, and partner outreach separately.",
+        brandBrainVersion: 1,
+        brandBrainConfiguredAt: new Date(),
+      },
+    });
+    console.log("Configured canonical Eyez on the Prize Brand Brain v1.");
+  } else {
+    console.log(`Preserved operator-managed Eyez on the Prize Brand Brain v${eyezOnThePrize.brandBrainVersion}.`);
+  }
+
   const brands = await prisma.brand.findMany();
   const brandIds = Object.fromEntries(brands.map((brand) => [brand.key, brand.id]));
   for (const program of growthProgramDefinitions) {
@@ -272,3 +305,4 @@ main()
     await prisma.$disconnect();
     process.exit(1);
   });
+
