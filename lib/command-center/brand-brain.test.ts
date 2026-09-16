@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { contentModesToText, hasConfiguredBrandBrain, parseContentModes, parseLines, rankEyeQBrandBrain, shouldInitializeBrandBrain, stadiumSlopBrandBrain, teamM8tesBrandBrain } from "./brand-brain";
+import { contentModesToText, fantasyTrackBrandBrain, hasConfiguredBrandBrain, parseContentModes, parseLines, rankEyeQBrandBrain, shouldInitializeBrandBrain, stadiumSlopBrandBrain, teamM8tesBrandBrain } from "./brand-brain";
 
 describe("Brand Brain", () => {
   it("uses an explicit configuration state", () => {
@@ -42,5 +42,14 @@ describe("Brand Brain", () => {
     expect(rankEyeQBrandBrain.contentModes.map((mode) => mode.name)).toEqual(["Acquire", "Rank", "Challenge", "Results / Receipts", "Compare", "Report / Insight", "Reputation / Celebrate", "Outreach"]);
     expect(rankEyeQBrandBrain.aiOperatingInstructions).toContain("Distinguish submitted predictions, consensus, and actual results");
     expect(rankEyeQBrandBrain.prohibitedContent.some((rule) => rule.includes("sportsbook"))).toBe(true);
+  });
+
+  it("separates FantasyTrack's consumer race from its B2B pricing thesis", () => {
+    expect(fantasyTrackBrandBrain.corePromise).toBe("Every player. One race. Who finishes first?");
+    expect(fantasyTrackBrandBrain.coreProposition).toContain("The players are the field. The game is the race.");
+    expect(fantasyTrackBrandBrain.contentPillars).toEqual(["The Position Race", "Player vs Player", "Live Race", "Long Shots / Breakouts", "Public Conviction", "The Field Prices Itself"]);
+    expect(fantasyTrackBrandBrain.contentModes.map((mode) => mode.name)).toEqual(["Acquire", "Pick Your Runner", "Pre-Race", "Live Race", "Results", "Long Shot / Breakout", "Public Conviction", "Industry / B2B", "Outreach"]);
+    expect(fantasyTrackBrandBrain.aiOperatingInstructions).toContain("Distinguish the simple consumer race story from the B2B self-pricing-field story");
+    expect(fantasyTrackBrandBrain.prohibitedContent.some((rule) => rule.includes("Promises of profit"))).toBe(true);
   });
 });
