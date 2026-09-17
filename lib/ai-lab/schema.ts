@@ -25,6 +25,7 @@ export const generationInputSchema = z.object({
   growthProgramId: optionalId,
   campaignId: optionalId,
   activationId: optionalId,
+  eventId: optionalId,
   opportunityId: optionalId,
   relationshipId: optionalId,
   audienceSegment: z.string().trim().max(1000).optional().transform((value) => value || undefined),

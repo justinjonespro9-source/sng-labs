@@ -58,3 +58,21 @@ npm run db:seed
 ```
 
 Google OAuth should allow the production callback URL `https://www.snglabs.com/api/auth/callback/google`.
+
+## Game-Day Engine V1
+
+Game-Day Engine V1 uses the reviewed, checked-in `data/nfl/2026-regular-season.json` snapshot. Runtime code does not scrape, poll, or call ESPN (or any other schedule provider). The fixture identifies its original source and retrieval timestamp for auditability.
+
+After applying the additive Prisma migration, inspect the import without writing:
+
+```bash
+npm run game-day:import-nfl
+```
+
+Apply the reviewed snapshot explicitly:
+
+```bash
+npm run game-day:import-nfl -- --apply
+```
+
+The importer uses `(source, sourceEventId)` as stable event identity, creates missing canonical NFL Market/Team/Venue foundation records, fills only empty foundation fields on existing records, and reports source events that disappeared without deleting them. Re-running it updates schedule changes in place and does not create duplicate events. Recommendation evaluation is a separate, operator-triggered action in `/command-center/live-desk`; it does not invoke AI or create Opportunities until a user accepts a persisted recommendation.
