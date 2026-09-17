@@ -34,7 +34,7 @@ export default async function SignInPage() {
         <p className="mt-4 text-sm leading-6 text-[#9a9a96]">
           Access is limited to approved SNG LABS accounts. Sign in with your authorized Google account.
         </p>
-        {!googleAuth.configured && <p className="mt-6 rounded-xl border border-[#ec7f72]/25 bg-[#ec7f72]/5 p-4 text-sm text-[#ec9a90]">Google sign-in is unavailable because this deployment is missing its server-side OAuth configuration.</p>}
+        {!googleAuth.configured && <p className="mt-6 rounded-xl border border-[#ec7f72]/25 bg-[#ec7f72]/5 p-4 text-sm text-[#ec9a90]">Google sign-in is unavailable because this deployment is missing: {googleAuth.missing.join(" and ")}.</p>}
         <form action={signInWithGoogle} className="mt-8">
           <button
             type="submit"
