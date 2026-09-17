@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { auth, signIn } from "@/auth";
 import { LogoMark } from "@/components/logo-mark";
 import { isAllowedEmail } from "@/lib/auth/allowlist";
+import { getGoogleAuthConfig } from "@/lib/auth/google-config";
 
 export const metadata: Metadata = {
   title: "Sign in | SNG Command Center",
@@ -11,6 +12,7 @@ export const metadata: Metadata = {
 };
 
 export default async function SignInPage() {
+  const googleAuth = getGoogleAuthConfig();
   const session = await auth();
   if (session?.user && isAllowedEmail(session.user.email)) redirect("/command-center");
 
@@ -32,10 +34,12 @@ export default async function SignInPage() {
         <p className="mt-4 text-sm leading-6 text-[#9a9a96]">
           Access is limited to approved SNG LABS accounts. Sign in with your authorized Google account.
         </p>
+        {!googleAuth.configured && <p className="mt-6 rounded-xl border border-[#ec7f72]/25 bg-[#ec7f72]/5 p-4 text-sm text-[#ec9a90]">Google sign-in is unavailable because this deployment is missing its server-side OAuth configuration.</p>}
         <form action={signInWithGoogle} className="mt-8">
           <button
             type="submit"
-            className="flex w-full items-center justify-center rounded-xl bg-[#b8d4c8] px-5 py-3 text-sm font-semibold text-[#07100d] transition hover:bg-[#c9e3d8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#b8d4c8] focus-visible:ring-offset-2 focus-visible:ring-offset-[#101214]"
+            disabled={!googleAuth.configured}
+            className="flex w-full items-center justify-center rounded-xl bg-[#b8d4c8] px-5 py-3 text-sm font-semibold text-[#07100d] transition hover:bg-[#c9e3d8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#b8d4c8] focus-visible:ring-offset-2 focus-visible:ring-offset-[#101214] disabled:cursor-not-allowed disabled:opacity-40"
           >
             Continue with Google
           </button>
