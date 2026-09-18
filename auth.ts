@@ -3,12 +3,15 @@ import Google from "next-auth/providers/google";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import type { UserRole } from "@prisma/client";
 import { isAllowedEmail, roleForAllowedEmail } from "@/lib/auth/allowlist";
+import { getGoogleAuthConfig } from "@/lib/auth/google-config";
 import { prisma } from "@/lib/prisma";
+
+const googleAuth = getGoogleAuthConfig();
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: PrismaAdapter(prisma),
   session: { strategy: "jwt" },
-  providers: [Google],
+  providers: [Google({ clientId: googleAuth.clientId, clientSecret: googleAuth.clientSecret })],
   pages: { signIn: "/sign-in" },
   callbacks: {
     signIn({ account, profile, user }) {
