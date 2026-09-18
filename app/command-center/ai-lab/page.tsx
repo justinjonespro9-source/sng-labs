@@ -4,26 +4,28 @@ import { PageHeader } from "@/components/command-center/page-header";
 import { createDraftFromExecutionAction } from "@/lib/ai-lab/actions";
 import { getAiProviderAvailability } from "@/lib/ai-lab/provider";
 import { generatedExecutionSchema } from "@/lib/ai-lab/schema";
+import { resolveAiLabSetupDefaults } from "@/lib/ai-lab/setup-defaults";
 import { hasConfiguredBrandBrain } from "@/lib/command-center/brand-brain";
 import { prisma } from "@/lib/prisma";
 
 function stringValue(value: unknown) { return typeof value === "string" ? value : ""; }
 
-export default async function AiLabPage({ searchParams }: { searchParams: Promise<{ run?: string; brand?: string; opportunity?: string; event?: string }> }) {
-  const { run: selectedRunId, brand: defaultBrandId, opportunity: defaultOpportunityId, event: defaultEventId } = await searchParams;
+export default async function AiLabPage({ searchParams }: { searchParams: Promise<{ run?: string; brand?: string; opportunity?: string; event?: string; growthProgram?: string; campaign?: string; activation?: string }> }) {
+  const { run: selectedRunId, brand: defaultBrandId, opportunity: defaultOpportunityId, event: defaultEventId, growthProgram: defaultGrowthProgramId, campaign: defaultCampaignId, activation: defaultActivationId } = await searchParams;
   const [allBrands, programs, campaigns, activations, events, opportunities, relationships, runs, selectedRun] = await Promise.all([
     prisma.brand.findMany({ where: { active: true }, orderBy: { name: "asc" } }),
     prisma.growthProgram.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
     prisma.campaign.findMany({ where: { active: true }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
     prisma.campaignActivation.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
     prisma.growthEvent.findMany({ where: { league: "NFL" }, orderBy: { startsAt: "asc" }, take: 300, select: { id: true, name: true } }),
-    prisma.opportunity.findMany({ where: { status: { not: "DISMISSED" } }, orderBy: { updatedAt: "desc" }, take: 100, select: { id: true, title: true, eventId: true } }),
+    prisma.opportunity.findMany({ where: { status: { not: "DISMISSED" } }, orderBy: { updatedAt: "desc" }, take: 100, select: { id: true, title: true, eventId: true, activation: { select: { id: true, campaign: { select: { id: true, programId: true } } } }, campaigns: { select: { campaign: { select: { id: true, programId: true } } }, orderBy: { campaignId: "asc" } } } }),
     prisma.relationship.findMany({ orderBy: { updatedAt: "desc" }, take: 100, select: { id: true, name: true } }),
     prisma.generationRun.findMany({ include: { brand: { select: { name: true } }, content: { select: { id: true } } }, orderBy: { createdAt: "desc" }, take: 20 }),
     selectedRunId ? prisma.generationRun.findUnique({ where: { id: selectedRunId }, include: { brand: { select: { name: true } }, event: { select: { name: true } }, opportunity: { select: { title: true } }, content: { select: { id: true } }, createdBy: { select: { name: true, email: true } } } }) : null,
   ]);
   const brands = allBrands.filter(hasConfiguredBrandBrain).map(({ id, name }) => ({ id, name }));
   const provider = getAiProviderAvailability();
+  const setupDefaults = resolveAiLabSetupDefaults({ brandId: defaultBrandId, opportunityId: defaultOpportunityId, eventId: defaultEventId, growthProgramId: defaultGrowthProgramId, campaignId: defaultCampaignId, activationId: defaultActivationId, opportunities });
   const parsedOutput = selectedRun?.structuredOutput ? generatedExecutionSchema.safeParse(selectedRun.structuredOutput) : null;
   const output = parsedOutput?.success ? parsedOutput.data : null;
   const context = selectedRun?.resolvedContext as Record<string, unknown> | undefined;
@@ -32,7 +34,7 @@ export default async function AiLabPage({ searchParams }: { searchParams: Promis
 
   return <div><PageHeader title="AI Lab" description="Resolve trusted SNG context, generate one structured marketing execution, and optionally hand a qualified result to the existing Content Queue." />
     {!provider.configured && <div className="mt-7 rounded-2xl border border-[#f0bd65]/25 bg-[#f0bd65]/5 p-5"><p className="text-sm font-semibold text-[#e2c58f]">Generation is currently unavailable</p><p className="mt-1 text-xs leading-5 text-[#a99a7e]">Configure the server-only OPENAI_API_KEY and AI_MODEL environment variables. The rest of the Command Center remains available.</p></div>}
-    <section className="mt-7 rounded-2xl border border-white/8 bg-[#101214] p-6"><div className="flex items-center justify-between gap-4"><div><p className="text-[10px] uppercase tracking-[.18em] text-[#b8d4c8]">Generation Setup</p><h2 className="mt-2 font-display text-xl text-white">Build a brand-specific execution</h2></div><span className="text-xs text-[#747976]">{brands.length} configured Brands</span></div><AiLabForm brands={brands} programs={programs} campaigns={campaigns} activations={activations} events={events} opportunities={opportunities.map(({ id, title }) => ({ id, name: title }))} relationships={relationships} disabled={!provider.configured} defaults={{ brandId: defaultBrandId, opportunityId: defaultOpportunityId, eventId: defaultEventId || opportunities.find((item) => item.id === defaultOpportunityId)?.eventId || undefined }} /></section>
+    <section className="mt-7 rounded-2xl border border-white/8 bg-[#101214] p-6"><div className="flex items-center justify-between gap-4"><div><p className="text-[10px] uppercase tracking-[.18em] text-[#b8d4c8]">Generation Setup</p><h2 className="mt-2 font-display text-xl text-white">Build a brand-specific execution</h2></div><span className="text-xs text-[#747976]">{brands.length} configured Brands</span></div><AiLabForm brands={brands} programs={programs} campaigns={campaigns} activations={activations} events={events} opportunities={opportunities.map(({ id, title }) => ({ id, name: title }))} relationships={relationships} disabled={!provider.configured} defaults={setupDefaults} /></section>
 
     {selectedRun && <section className="mt-8 space-y-5">
       <div className="rounded-2xl border border-white/8 bg-[#101214] p-6"><div className="flex flex-wrap items-start justify-between gap-4"><div><p className="text-[10px] uppercase tracking-[.18em] text-[#b8d4c8]">Run Detail</p><h2 className="mt-2 font-display text-2xl text-white">{selectedRun.brand?.name || "Historical run"}</h2><p className="mt-1 text-xs text-[#747976]">{selectedRun.createdAt.toLocaleString()} · {selectedRun.channel.replaceAll("_", " ")}</p></div><span className="rounded-full border border-white/10 px-3 py-1 text-xs text-[#b8bcba]">{selectedRun.status}</span></div>
