@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { checksumImport, rosterPayloadSchema } from "./import-schema";
+import { checksumImport, rosterPayloadSchema, SNG_ROSTER_EXPORT_VERSION } from "./import-schema";
 
 describe("sports roster import contract", () => {
   it("accepts NFL 2026 and rejects unsupported years", () => {
@@ -12,5 +12,44 @@ describe("sports roster import contract", () => {
     const raw = JSON.stringify({ hello: "world" });
     expect(checksumImport(raw)).toBe(checksumImport(raw));
     expect(checksumImport(raw)).not.toBe(checksumImport(`${raw} `));
+  });
+
+  it("rejects duplicate provider identities within one payload", () => {
+    const row = { provider: "nflcom-bootstrap", externalId: "player-1", canonicalName: "Player One", teamAbbreviation: "MIN", fantasyPosition: "RB" };
+    const result = rosterPayloadSchema.safeParse({ league: "NFL", year: 2026, sourceLabel: "operator", rows: [row, { ...row, teamAbbreviation: "PHI" }] });
+    expect(result.success).toBe(false);
+  });
+
+  it("requires all 32 teams for the versioned RankEyeQ league export", () => {
+    const result = rosterPayloadSchema.safeParse({
+      contractVersion: SNG_ROSTER_EXPORT_VERSION,
+      league: "NFL",
+      year: 2026,
+      sourceLabel: "RankEyeQ export",
+      exportedAt: "2026-09-19T00:00:00.000Z",
+      rows: [{ provider: "nflcom-bootstrap", externalId: "player-1", canonicalName: "Player One", teamAbbreviation: "MIN", fantasyPosition: "RB" }],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts a unique, versioned 32-team league export", () => {
+    const teams = Array.from({ length: 32 }, (_, index) => `T${String(index).padStart(2, "0")}`);
+    const result = rosterPayloadSchema.safeParse({
+      contractVersion: SNG_ROSTER_EXPORT_VERSION,
+      league: "NFL",
+      year: 2026,
+      sourceLabel: "RankEyeQ export",
+      sourceReference: "rankeyeq://season/2026",
+      sourceSyncedAt: "2026-09-18T00:00:00.000Z",
+      exportedAt: "2026-09-19T00:00:00.000Z",
+      rows: teams.map((team, index) => ({
+        provider: "nflcom-bootstrap",
+        externalId: `player-${index}`,
+        canonicalName: `Player ${index}`,
+        teamAbbreviation: team,
+        fantasyPosition: "RB",
+      })),
+    });
+    expect(result.success).toBe(true);
   });
 });
