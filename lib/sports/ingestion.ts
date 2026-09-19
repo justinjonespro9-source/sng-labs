@@ -1,5 +1,4 @@
-import { Prisma, type SportsIngestionRecordStatus } from "@prisma/client";
-import { prisma } from "@/lib/prisma";
+import { Prisma, type PrismaClient, type SportsIngestionRecordStatus } from "@prisma/client";
 import { resolveParticipantIdentity, type IdentityCandidate } from "./identity";
 import { checksumImport, rosterPayloadSchema, SPORTS_IMPORT_PARSER_VERSION } from "./import-schema";
 import { activeMembershipDeactivationWhere } from "./roster-history";
@@ -13,8 +12,13 @@ type PlannedRow = {
   message?: string;
 };
 
-async function loadCandidates(): Promise<IdentityCandidate[]> {
-  const participants = await prisma.sportsParticipant.findMany({
+async function getPrisma(client?: PrismaClient) {
+  if (client) return client;
+  return (await import("@/lib/prisma")).prisma;
+}
+
+async function loadCandidates(client: PrismaClient): Promise<IdentityCandidate[]> {
+  const participants = await client.sportsParticipant.findMany({
     include: {
       aliases: true,
       externalIdentities: true,
@@ -36,7 +40,8 @@ async function loadCandidates(): Promise<IdentityCandidate[]> {
   }));
 }
 
-export async function previewRosterImport(rawPayload: string, actorId?: string | null) {
+export async function previewRosterImport(rawPayload: string, actorId?: string | null, injectedClient?: PrismaClient) {
+  const prisma = await getPrisma(injectedClient);
   const payload = rosterPayloadSchema.parse(JSON.parse(rawPayload));
   const checksum = checksumImport(rawPayload);
   const season = await prisma.sportsSeason.findUnique({ where: { league_year: { league: payload.league, year: payload.year } } });
@@ -48,7 +53,7 @@ export async function previewRosterImport(rawPayload: string, actorId?: string |
   if (existing) return existing;
 
   const [candidates, teams] = await Promise.all([
-    loadCandidates(),
+    loadCandidates(prisma),
     prisma.team.findMany({ where: { league: "NFL" } }),
   ]);
   const teamByAbbreviation = new Map(teams.map((team) => [team.abbreviation, team]));
@@ -93,7 +98,8 @@ export async function previewRosterImport(rawPayload: string, actorId?: string |
   });
 }
 
-export async function applyRosterImport(runId: string, actorId?: string | null) {
+export async function applyRosterImport(runId: string, actorId?: string | null, injectedClient?: PrismaClient) {
+  const prisma = await getPrisma(injectedClient);
   const run = await prisma.sportsIngestionRun.findUnique({ where: { id: runId }, include: { records: { orderBy: { rowNumber: "asc" } }, season: true } });
   if (!run || !run.season) throw new Error("Roster import preview not found");
   const season = run.season;
