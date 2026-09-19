@@ -2,6 +2,7 @@ import { Prisma, PrismaClient } from "@prisma/client";
 import { brandDefinitions } from "../lib/command-center/brand-definitions";
 import { eyezOnThePrizeBrandBrain, fantasyTrackBrandBrain, handicapHeroBrandBrain, rankEyeQBrandBrain, shouldInitializeBrandBrain, sngLabsBrandBrain, stadiumSlopBrandBrain, teamM8tesBrandBrain } from "../lib/command-center/brand-brain";
 import { campaignDefinitions, growthProgramDefinitions } from "../lib/command-center/campaign-definitions";
+import { seedSportsIdentityFoundation } from "../lib/sports/seed-foundation";
 
 const prisma = new PrismaClient();
 
@@ -362,6 +363,9 @@ async function main() {
       relevantBrands: { connect: ["rank-eye-q", "handicap-hero", "stadium-slop", "team-m8tes"].map((brandKey) => ({ id: brandIds[brandKey] })) },
     },
   });
+
+  const sports = await seedSportsIdentityFoundation(prisma);
+  console.log(`Verified ${sports.defenseCount}/${sports.teamCount} canonical NFL D/ST identities for ${sports.season.label}.`);
 }
 
 main()
@@ -371,4 +375,3 @@ main()
     await prisma.$disconnect();
     process.exit(1);
   });
-
