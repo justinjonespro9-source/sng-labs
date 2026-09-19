@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
 
-export const SPORTS_IMPORT_PARSER_VERSION = "sports-v1a-1";
+export const SPORTS_IMPORT_PARSER_VERSION = "sports-v1b-1";
+export const SNG_ROSTER_EXPORT_VERSION = "sng-sports-roster-v1";
 
 export const rosterRowSchema = z.object({
   provider: z.string().trim().min(1),
@@ -14,14 +15,42 @@ export const rosterRowSchema = z.object({
   status: z.enum(["ACTIVE", "PRACTICE_SQUAD", "INJURED_RESERVE", "PUP", "SUSPENDED", "INACTIVE", "FREE_AGENT", "OTHER"]).default("ACTIVE"),
   active: z.boolean().default(true),
   jerseyNumber: z.number().int().min(0).max(99).optional(),
+  sourceStatus: z.string().trim().nullable().optional(),
 });
 
 export const rosterPayloadSchema = z.object({
+  contractVersion: z.literal(SNG_ROSTER_EXPORT_VERSION).optional(),
   league: z.literal("NFL"),
   year: z.literal(2026),
   sourceLabel: z.string().trim().min(1),
   sourceReference: z.string().trim().optional(),
+  sourceSyncedAt: z.iso.datetime().nullable().optional(),
+  exportedAt: z.iso.datetime().optional(),
   rows: z.array(rosterRowSchema).min(1),
+}).superRefine((payload, context) => {
+  const externalKeys = new Set<string>();
+  payload.rows.forEach((row, index) => {
+    const key = `${row.provider}:${row.externalId}`;
+    if (externalKeys.has(key)) {
+      context.addIssue({
+        code: "custom",
+        path: ["rows", index, "externalId"],
+        message: `Duplicate provider identity ${key}`,
+      });
+    }
+    externalKeys.add(key);
+  });
+
+  if (payload.contractVersion === SNG_ROSTER_EXPORT_VERSION) {
+    const teams = new Set(payload.rows.map((row) => row.teamAbbreviation));
+    if (teams.size !== 32) {
+      context.addIssue({
+        code: "custom",
+        path: ["rows"],
+        message: `League export must cover 32 NFL teams; received ${teams.size}`,
+      });
+    }
+  }
 });
 
 export type RosterPayload = z.infer<typeof rosterPayloadSchema>;
