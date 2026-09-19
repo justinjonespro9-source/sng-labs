@@ -1,0 +1,15 @@
+{
+  "league": "NFL",
+  "year": 2026,
+  "sourceLabel": "RankEyeQ 2026 roster export V1",
+  "sourceReference": "justinjonespro9-source/RankEyeQ:lib/providers/nfl/nflcom/fixtures/minnesota-vikings-roster.html",
+  "rows": [
+    { "provider": "rankeyeq-export", "externalId": "aaron-jones", "canonicalName": "Aaron Jones", "aliases": ["Aaron Jones Sr."], "teamAbbreviation": "MIN", "fantasyPosition": "RB", "sourcePosition": "RB", "status": "ACTIVE", "active": true },
+    { "provider": "rankeyeq-export", "externalId": "jordan-mason", "canonicalName": "Jordan Mason", "teamAbbreviation": "MIN", "fantasyPosition": "RB", "sourcePosition": "RB", "status": "ACTIVE", "active": true },
+    { "provider": "rankeyeq-export", "externalId": "demond-claiborne", "canonicalName": "Demond Claiborne", "teamAbbreviation": "MIN", "fantasyPosition": "RB", "sourcePosition": "RB", "status": "ACTIVE", "active": true },
+    { "provider": "rankeyeq-export", "externalId": "j-j-mccarthy", "canonicalName": "J.J. McCarthy", "teamAbbreviation": "MIN", "fantasyPosition": "QB", "sourcePosition": "QB", "status": "ACTIVE", "active": true },
+    { "provider": "rankeyeq-export", "externalId": "justin-jefferson", "canonicalName": "Justin Jefferson", "teamAbbreviation": "MIN", "fantasyPosition": "WR", "sourcePosition": "WR", "status": "ACTIVE", "active": true },
+    { "provider": "rankeyeq-export", "externalId": "jordan-addison", "canonicalName": "Jordan Addison", "teamAbbreviation": "MIN", "fantasyPosition": "WR", "sourcePosition": "WR", "status": "ACTIVE", "active": true },
+    { "provider": "rankeyeq-export", "externalId": "t-j-hockenson", "canonicalName": "T.J. Hockenson", "teamAbbreviation": "MIN", "fantasyPosition": "TE", "sourcePosition": "TE", "status": "ACTIVE", "active": true }
+  ]
+}

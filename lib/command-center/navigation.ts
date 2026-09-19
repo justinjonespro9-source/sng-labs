@@ -9,6 +9,7 @@ export const commandCenterNavigation = [
   { href: "/command-center/campaigns", label: "Campaigns", key: "campaigns" },
   { href: "/command-center/relationships", label: "Relationships", key: "relationships" },
   { href: "/command-center/live-desk", label: "Live Desk", key: "live-desk" },
+  { href: "/command-center/sports", label: "Sports Data", key: "sports" },
   { href: "/command-center/engagement", label: "Engagement", key: "engagement" },
   { href: "/command-center/analytics", label: "Analytics", key: "analytics" },
   { href: "/command-center/account-health", label: "Account Health", key: "account-health" },
@@ -16,5 +17,5 @@ export const commandCenterNavigation = [
 ] as const;
 
 export const scaffoldSections = commandCenterNavigation.filter(
-  (item) => !["overview", "opportunities", "ai-lab", "queue", "brands", "markets", "campaigns", "relationships", "live-desk"].includes(item.key),
+  (item) => !["overview", "opportunities", "ai-lab", "queue", "brands", "markets", "campaigns", "relationships", "live-desk", "sports"].includes(item.key),
 );

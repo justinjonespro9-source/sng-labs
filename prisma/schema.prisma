@@ -232,6 +232,65 @@ enum OperatorContextTrust {
   HYPOTHETICAL
 }
 
+enum SportsParticipantKind {
+  PLAYER
+  TEAM_DEFENSE
+}
+
+enum FantasyPosition {
+  QB
+  RB
+  WR
+  TE
+  DEF
+}
+
+enum SportsRosterStatus {
+  ACTIVE
+  PRACTICE_SQUAD
+  INJURED_RESERVE
+  PUP
+  SUSPENDED
+  INACTIVE
+  FREE_AGENT
+  OTHER
+}
+
+enum SportsIngestionType {
+  PLAYER_DIRECTORY
+  SEASON_ROSTER
+  PARTICIPANT_IDENTITY
+}
+
+enum SportsIngestionStatus {
+  PREVIEWED
+  APPLIED
+  FAILED
+}
+
+enum SportsIngestionRecordStatus {
+  CREATE
+  UPDATE
+  UNCHANGED
+  SKIPPED
+  UNRESOLVED
+  ERROR
+}
+
+enum SportsDataQualityIssueType {
+  UNRESOLVED_IDENTITY
+  AMBIGUOUS_MATCH
+  DUPLICATE_CANDIDATE
+  MISSING_EXTERNAL_MAPPING
+  CONFLICTING_ROSTER_TEAM
+}
+
+enum SportsDataQualityIssueStatus {
+  OPEN
+  RESOLVED
+  DISMISSED
+}
+
 model User {
   id                      String                      @id @default(cuid())
   name                    String?
@@ -246,6 +305,7 @@ model User {
   relationships           Relationship[]
   generationRuns          GenerationRun[]
   reviewedRecommendations OpportunityRecommendation[] @relation("RecommendationReviewer")
+  sportsIngestionRuns     SportsIngestionRun[]
   createdAt               DateTime                    @default(now())
   updatedAt               DateTime                    @updatedAt
 }
@@ -600,32 +660,34 @@ model Market {
 }
 
 model Team {
-  id             String               @id @default(cuid())
-  key            String               @unique
-  name           String
-  marketId       String
-  sport          String
-  league         String
-  abbreviation   String?
-  externalSource String?
-  externalId     String?
-  venueName      String?
-  homeVenueId    String?
-  websiteUrl     String?
-  notes          String?
-  active         Boolean              @default(true)
-  market         Market               @relation(fields: [marketId], references: [id], onDelete: Restrict)
-  homeVenue      Venue?               @relation("TeamHomeVenue", fields: [homeVenueId], references: [id], onDelete: SetNull)
-  brands         Brand[]              @relation("BrandTeams")
-  campaigns      Campaign[]           @relation("TeamCampaigns")
-  organizations  Organization[]       @relation("OrganizationTeams")
-  opportunities  Opportunity[]        @relation("TeamOpportunities")
-  events         GrowthEvent[]        @relation("TeamEvents")
-  homeEvents     GrowthEvent[]        @relation("GrowthEventHomeTeam")
-  awayEvents     GrowthEvent[]        @relation("GrowthEventAwayTeam")
-  activations    CampaignActivation[]
-  createdAt      DateTime             @default(now())
-  updatedAt      DateTime             @updatedAt
+  id                String                   @id @default(cuid())
+  key               String                   @unique
+  name              String
+  marketId          String
+  sport             String
+  league            String
+  abbreviation      String?
+  externalSource    String?
+  externalId        String?
+  venueName         String?
+  homeVenueId       String?
+  websiteUrl        String?
+  notes             String?
+  active            Boolean                  @default(true)
+  market            Market                   @relation(fields: [marketId], references: [id], onDelete: Restrict)
+  homeVenue         Venue?                   @relation("TeamHomeVenue", fields: [homeVenueId], references: [id], onDelete: SetNull)
+  brands            Brand[]                  @relation("BrandTeams")
+  campaigns         Campaign[]               @relation("TeamCampaigns")
+  organizations     Organization[]           @relation("OrganizationTeams")
+  opportunities     Opportunity[]            @relation("TeamOpportunities")
+  events            GrowthEvent[]            @relation("TeamEvents")
+  homeEvents        GrowthEvent[]            @relation("GrowthEventHomeTeam")
+  awayEvents        GrowthEvent[]            @relation("GrowthEventAwayTeam")
+  activations       CampaignActivation[]
+  rosterMemberships SeasonRosterMembership[]
+  teamDefense       TeamDefense?
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
 
   @@unique([league, abbreviation])
   @@unique([externalSource, externalId])
@@ -914,6 +976,179 @@ model AuditEvent {
 
   @@index([entityType, entityId, createdAt])
   @@index([actorId, createdAt])
+}
+
+model SportsSeason {
+  id            String                   @id @default(cuid())
+  league        String
+  year          Int
+  label         String
+  active        Boolean                  @default(false)
+  participants  SeasonRosterMembership[]
+  ingestionRuns SportsIngestionRun[]
+  createdAt     DateTime                 @default(now())
+  updatedAt     DateTime                 @updatedAt
+
+  @@unique([league, year])
+  @@index([active, league, year])
+}
+
+model SportsParticipant {
+  id                 String                        @id @default(cuid())
+  kind               SportsParticipantKind
+  canonicalName      String
+  active             Boolean                       @default(true)
+  player             Player?
+  teamDefense        TeamDefense?
+  externalIdentities ParticipantExternalIdentity[]
+  aliases            ParticipantAlias[]
+  rosterMemberships  SeasonRosterMembership[]
+  qualityIssues      SportsDataQualityIssue[]
+  createdAt          DateTime                      @default(now())
+  updatedAt          DateTime                      @updatedAt
+
+  @@index([kind, canonicalName])
+  @@index([active, kind])
+}
+
+model Player {
+  id            String            @id @default(cuid())
+  participantId String            @unique
+  firstName     String?
+  lastName      String?
+  birthDate     DateTime?
+  headshotUrl   String?
+  participant   SportsParticipant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+}
+
+model TeamDefense {
+  id            String            @id @default(cuid())
+  participantId String            @unique
+  teamId        String            @unique
+  participant   SportsParticipant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  team          Team              @relation(fields: [teamId], references: [id], onDelete: Restrict)
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+}
+
+model ParticipantExternalIdentity {
+  id              String            @id @default(cuid())
+  participantId   String
+  provider        String
+  externalId      String
+  sourceLabel     String?
+  sourceReference String?
+  verifiedAt      DateTime?
+  participant     SportsParticipant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  @@unique([provider, externalId])
+  @@unique([participantId, provider, externalId])
+  @@index([participantId])
+}
+
+model ParticipantAlias {
+  id              String            @id @default(cuid())
+  participantId   String
+  alias           String
+  normalizedAlias String
+  sourceLabel     String?
+  participant     SportsParticipant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  createdAt       DateTime          @default(now())
+
+  @@unique([participantId, normalizedAlias])
+  @@index([normalizedAlias])
+}
+
+model SeasonRosterMembership {
+  id              String             @id @default(cuid())
+  seasonId        String
+  participantId   String
+  teamId          String
+  fantasyPosition FantasyPosition
+  sourcePosition  String?
+  status          SportsRosterStatus @default(ACTIVE)
+  active          Boolean            @default(true)
+  jerseyNumber    Int?
+  sourceLabel     String?
+  sourceReference String?
+  season          SportsSeason       @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  participant     SportsParticipant  @relation(fields: [participantId], references: [id], onDelete: Restrict)
+  team            Team               @relation(fields: [teamId], references: [id], onDelete: Restrict)
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  @@unique([seasonId, participantId, teamId])
+  @@index([seasonId, teamId, active])
+  @@index([participantId, seasonId])
+}
+
+model SportsIngestionRun {
+  id              String                   @id @default(cuid())
+  createdById     String?
+  seasonId        String?
+  type            SportsIngestionType
+  status          SportsIngestionStatus    @default(PREVIEWED)
+  sourceType      String
+  sourceLabel     String
+  sourceReference String?
+  checksum        String
+  parserVersion   String
+  rawPayload      String                   @db.Text
+  createdCount    Int                      @default(0)
+  updatedCount    Int                      @default(0)
+  unchangedCount  Int                      @default(0)
+  skippedCount    Int                      @default(0)
+  unresolvedCount Int                      @default(0)
+  errorCount      Int                      @default(0)
+  appliedAt       DateTime?
+  createdBy       User?                    @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  season          SportsSeason?            @relation(fields: [seasonId], references: [id], onDelete: SetNull)
+  records         SportsIngestionRecord[]
+  qualityIssues   SportsDataQualityIssue[]
+  createdAt       DateTime                 @default(now())
+  updatedAt       DateTime                 @updatedAt
+
+  @@unique([type, checksum, seasonId])
+  @@index([status, createdAt])
+  @@index([seasonId, createdAt])
+}
+
+model SportsIngestionRecord {
+  id             String                      @id @default(cuid())
+  runId          String
+  rowNumber      Int
+  status         SportsIngestionRecordStatus
+  rawData        Json
+  normalizedData Json?
+  participantId  String?
+  message        String?
+  run            SportsIngestionRun          @relation(fields: [runId], references: [id], onDelete: Cascade)
+  createdAt      DateTime                    @default(now())
+
+  @@unique([runId, rowNumber])
+  @@index([runId, status])
+}
+
+model SportsDataQualityIssue {
+  id             String                       @id @default(cuid())
+  type           SportsDataQualityIssueType
+  status         SportsDataQualityIssueStatus @default(OPEN)
+  participantId  String?
+  ingestionRunId String?
+  summary        String
+  details        Json?
+  participant    SportsParticipant?           @relation(fields: [participantId], references: [id], onDelete: SetNull)
+  ingestionRun   SportsIngestionRun?          @relation(fields: [ingestionRunId], references: [id], onDelete: SetNull)
+  createdAt      DateTime                     @default(now())
+  resolvedAt     DateTime?
+
+  @@index([status, type, createdAt])
+  @@index([participantId])
+  @@index([ingestionRunId])
 }
 
 model GenerationRun {
