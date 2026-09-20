@@ -1,12 +1,20 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
 
-export const SPORTS_IMPORT_PARSER_VERSION = "sports-v1b-2";
+export const SPORTS_IMPORT_PARSER_VERSION = "sports-v1b-3";
 export const SNG_ROSTER_EXPORT_VERSION = "sng-sports-roster-v1";
 
 const NFL_TEAM_ABBREVIATION_ALIASES: Readonly<Record<string, string>> = {
   WAS: "WSH",
 };
+
+const RANKEYEQ_TEST_FIXTURE_EXTERNAL_ID_PATTERNS = [
+  /^test-player-trade$/,
+  /^dup-test-pool\d+$/,
+  /^rb-canonical-pool-integrity-\d+$/,
+  /^mover-player-trade\d+$/,
+  /^(?:wr-trade|wr-legacy|wr-weekteam|wr-filter|shared-id|rb-sync)-roster-team-\d+(?:-dup)?$/,
+];
 
 export function normalizeNflTeamAbbreviation(value: string) {
   const abbreviation = value.trim().toUpperCase();
@@ -38,6 +46,7 @@ export const rosterPayloadSchema = z.object({
   rows: z.array(rosterRowSchema).min(1),
 }).superRefine((payload, context) => {
   const externalKeys = new Set<string>();
+  const compositeKeys = new Set<string>();
   payload.rows.forEach((row, index) => {
     const key = `${row.provider}:${row.externalId}`;
     if (externalKeys.has(key)) {
@@ -48,6 +57,33 @@ export const rosterPayloadSchema = z.object({
       });
     }
     externalKeys.add(key);
+
+    const compositeKey = [
+      row.canonicalName.trim().toLocaleLowerCase("en-US"),
+      row.teamAbbreviation,
+      row.fantasyPosition,
+    ].join("|");
+    if (compositeKeys.has(compositeKey)) {
+      context.addIssue({
+        code: "custom",
+        path: ["rows", index, "canonicalName"],
+        message: `Ambiguous canonical player identity ${compositeKey}`,
+      });
+    }
+    compositeKeys.add(compositeKey);
+
+    if (
+      payload.contractVersion === SNG_ROSTER_EXPORT_VERSION &&
+      RANKEYEQ_TEST_FIXTURE_EXTERNAL_ID_PATTERNS.some((pattern) =>
+        pattern.test(row.externalId),
+      )
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["rows", index, "externalId"],
+        message: `RankEyeQ integration-test identity is not trusted roster data: ${row.externalId}`,
+      });
+    }
   });
 
   if (payload.contractVersion === SNG_ROSTER_EXPORT_VERSION) {

@@ -34,6 +34,35 @@ describe("sports roster import contract", () => {
     expect(result.success).toBe(false);
   });
 
+  it("rejects ambiguous canonical name/team/position composites", () => {
+    const row = { provider: "source-a", externalId: "player-1", canonicalName: "Player One", teamAbbreviation: "MIN", fantasyPosition: "RB" };
+    const result = rosterPayloadSchema.safeParse({
+      league: "NFL",
+      year: 2026,
+      sourceLabel: "operator",
+      rows: [row, { ...row, provider: "source-b", externalId: "player-2" }],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("fails closed on RankEyeQ integration-test identities in a versioned export", () => {
+    const teams = Array.from({ length: 32 }, (_, index) => `T${String(index).padStart(2, "0")}`);
+    const result = rosterPayloadSchema.safeParse({
+      contractVersion: SNG_ROSTER_EXPORT_VERSION,
+      league: "NFL",
+      year: 2026,
+      sourceLabel: "RankEyeQ export",
+      rows: teams.map((team, index) => ({
+        provider: "nflcom-bootstrap",
+        externalId: index === 0 ? "wr-filter-roster-team-123456789" : `player-${index}`,
+        canonicalName: `Player ${index}`,
+        teamAbbreviation: team,
+        fantasyPosition: "WR",
+      })),
+    });
+    expect(result.success).toBe(false);
+  });
+
   it("requires all 32 teams for the versioned RankEyeQ league export", () => {
     const result = rosterPayloadSchema.safeParse({
       contractVersion: SNG_ROSTER_EXPORT_VERSION,
