@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { checksumImport, rosterPayloadSchema, SNG_ROSTER_EXPORT_VERSION } from "./import-schema";
+import { checksumImport, normalizeNflTeamAbbreviation, rosterPayloadSchema, SNG_ROSTER_EXPORT_VERSION } from "./import-schema";
 
 describe("sports roster import contract", () => {
   it("accepts NFL 2026 and rejects unsupported years", () => {
@@ -12,6 +12,19 @@ describe("sports roster import contract", () => {
     const raw = JSON.stringify({ hello: "world" });
     expect(checksumImport(raw)).toBe(checksumImport(raw));
     expect(checksumImport(raw)).not.toBe(checksumImport(`${raw} `));
+  });
+
+  it("normalizes known source abbreviations to the canonical SNG team identity", () => {
+    expect(normalizeNflTeamAbbreviation("WAS")).toBe("WSH");
+    expect(normalizeNflTeamAbbreviation(" min ")).toBe("MIN");
+
+    const parsed = rosterPayloadSchema.parse({
+      league: "NFL",
+      year: 2026,
+      sourceLabel: "RankEyeQ export",
+      rows: [{ provider: "nflcom-bootstrap", externalId: "player-1", canonicalName: "Player One", teamAbbreviation: "WAS", fantasyPosition: "QB" }],
+    });
+    expect(parsed.rows[0].teamAbbreviation).toBe("WSH");
   });
 
   it("rejects duplicate provider identities within one payload", () => {

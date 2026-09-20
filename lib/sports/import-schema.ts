@@ -4,12 +4,21 @@ import { z } from "zod";
 export const SPORTS_IMPORT_PARSER_VERSION = "sports-v1b-1";
 export const SNG_ROSTER_EXPORT_VERSION = "sng-sports-roster-v1";
 
+const NFL_TEAM_ABBREVIATION_ALIASES: Readonly<Record<string, string>> = {
+  WAS: "WSH",
+};
+
+export function normalizeNflTeamAbbreviation(value: string) {
+  const abbreviation = value.trim().toUpperCase();
+  return NFL_TEAM_ABBREVIATION_ALIASES[abbreviation] ?? abbreviation;
+}
+
 export const rosterRowSchema = z.object({
   provider: z.string().trim().min(1),
   externalId: z.string().trim().min(1),
   canonicalName: z.string().trim().min(1),
   aliases: z.array(z.string().trim().min(1)).default([]),
-  teamAbbreviation: z.string().trim().toUpperCase().min(2).max(4),
+  teamAbbreviation: z.string().trim().toUpperCase().min(2).max(4).transform(normalizeNflTeamAbbreviation),
   fantasyPosition: z.enum(["QB", "RB", "WR", "TE"]),
   sourcePosition: z.string().trim().optional(),
   status: z.enum(["ACTIVE", "PRACTICE_SQUAD", "INJURED_RESERVE", "PUP", "SUSPENDED", "INACTIVE", "FREE_AGENT", "OTHER"]).default("ACTIVE"),
