@@ -260,6 +260,9 @@ enum SportsIngestionType {
   PLAYER_DIRECTORY
   SEASON_ROSTER
   PARTICIPANT_IDENTITY
+  PLAYER_EVENT_STATS
+  DEFENSE_EVENT_STATS
+  EVENT_STAT_CORRECTION
 }
 
 enum SportsIngestionStatus {
@@ -272,6 +275,8 @@ enum SportsIngestionRecordStatus {
   CREATE
   UPDATE
   UNCHANGED
+  CONFLICT
+  INVALID
   SKIPPED
   UNRESOLVED
   ERROR
@@ -283,6 +288,25 @@ enum SportsDataQualityIssueType {
   DUPLICATE_CANDIDATE
   MISSING_EXTERNAL_MAPPING
   CONFLICTING_ROSTER_TEAM
+  MISSING_EVENT
+  PARTICIPANT_TEAM_MISMATCH
+  DEFENSE_TEAM_MISMATCH
+  DUPLICATE_PERFORMANCE
+  CONFLICTING_FACTUAL_INPUT
+  INCOMPLETE_EVENT_STATS
+  CORRECTED_STAT
+}
+
+enum SportsStatFinality {
+  PROVISIONAL
+  FINAL
+  CORRECTED
+  VOID
+}
+
+enum SportsStatPerformanceKind {
+  PLAYER
+  TEAM_DEFENSE
 }
 
 enum SportsDataQualityIssueStatus {
@@ -306,6 +330,7 @@ model User {
   generationRuns          GenerationRun[]
   reviewedRecommendations OpportunityRecommendation[] @relation("RecommendationReviewer")
   sportsIngestionRuns     SportsIngestionRun[]
+  sportsStatRevisions     SportsStatRevision[]
   createdAt               DateTime                    @default(now())
   updatedAt               DateTime                    @updatedAt
 }
@@ -660,34 +685,35 @@ model Market {
 }
 
 model Team {
-  id                String                   @id @default(cuid())
-  key               String                   @unique
-  name              String
-  marketId          String
-  sport             String
-  league            String
-  abbreviation      String?
-  externalSource    String?
-  externalId        String?
-  venueName         String?
-  homeVenueId       String?
-  websiteUrl        String?
-  notes             String?
-  active            Boolean                  @default(true)
-  market            Market                   @relation(fields: [marketId], references: [id], onDelete: Restrict)
-  homeVenue         Venue?                   @relation("TeamHomeVenue", fields: [homeVenueId], references: [id], onDelete: SetNull)
-  brands            Brand[]                  @relation("BrandTeams")
-  campaigns         Campaign[]               @relation("TeamCampaigns")
-  organizations     Organization[]           @relation("OrganizationTeams")
-  opportunities     Opportunity[]            @relation("TeamOpportunities")
-  events            GrowthEvent[]            @relation("TeamEvents")
-  homeEvents        GrowthEvent[]            @relation("GrowthEventHomeTeam")
-  awayEvents        GrowthEvent[]            @relation("GrowthEventAwayTeam")
-  activations       CampaignActivation[]
-  rosterMemberships SeasonRosterMembership[]
-  teamDefense       TeamDefense?
-  createdAt         DateTime                 @default(now())
-  updatedAt         DateTime                 @updatedAt
+  id                   String                   @id @default(cuid())
+  key                  String                   @unique
+  name                 String
+  marketId             String
+  sport                String
+  league               String
+  abbreviation         String?
+  externalSource       String?
+  externalId           String?
+  venueName            String?
+  homeVenueId          String?
+  websiteUrl           String?
+  notes                String?
+  active               Boolean                  @default(true)
+  market               Market                   @relation(fields: [marketId], references: [id], onDelete: Restrict)
+  homeVenue            Venue?                   @relation("TeamHomeVenue", fields: [homeVenueId], references: [id], onDelete: SetNull)
+  brands               Brand[]                  @relation("BrandTeams")
+  campaigns            Campaign[]               @relation("TeamCampaigns")
+  organizations        Organization[]           @relation("OrganizationTeams")
+  opportunities        Opportunity[]            @relation("TeamOpportunities")
+  events               GrowthEvent[]            @relation("TeamEvents")
+  homeEvents           GrowthEvent[]            @relation("GrowthEventHomeTeam")
+  awayEvents           GrowthEvent[]            @relation("GrowthEventAwayTeam")
+  activations          CampaignActivation[]
+  rosterMemberships    SeasonRosterMembership[]
+  teamDefense          TeamDefense?
+  nflDefenseEventStats NflDefenseEventStat[]
+  createdAt            DateTime                 @default(now())
+  updatedAt            DateTime                 @updatedAt
 
   @@unique([league, abbreviation])
   @@unique([externalSource, externalId])
@@ -720,42 +746,46 @@ model Venue {
 }
 
 model GrowthEvent {
-  id              String                      @id @default(cuid())
-  key             String?                     @unique
-  name            String
-  type            GrowthEventType
-  description     String?
-  sport           String?
-  league          String?
-  season          Int?
-  week            Int?
-  status          GrowthEventStatus           @default(SCHEDULED)
-  startsAt        DateTime
-  endsAt          DateTime?
-  homeTeamId      String?
-  awayTeamId      String?
-  venueId         String?
-  venueName       String?
-  neutralSite     Boolean                     @default(false)
-  publicUrl       String?
-  source          String?
-  sourceEventId   String?
-  sourceUpdatedAt DateTime?
-  importedAt      DateTime?
-  sourceMetadata  Json?
-  marketId        String?
-  market          Market?                     @relation(fields: [marketId], references: [id], onDelete: SetNull)
-  homeTeam        Team?                       @relation("GrowthEventHomeTeam", fields: [homeTeamId], references: [id], onDelete: SetNull)
-  awayTeam        Team?                       @relation("GrowthEventAwayTeam", fields: [awayTeamId], references: [id], onDelete: SetNull)
-  venue           Venue?                      @relation(fields: [venueId], references: [id], onDelete: SetNull)
-  teams           Team[]                      @relation("TeamEvents")
-  campaigns       Campaign[]                  @relation("CampaignEvents")
-  activations     CampaignActivation[]
-  opportunities   Opportunity[]
-  recommendations OpportunityRecommendation[]
-  generationRuns  GenerationRun[]
-  createdAt       DateTime                    @default(now())
-  updatedAt       DateTime                    @updatedAt
+  id                  String                      @id @default(cuid())
+  key                 String?                     @unique
+  name                String
+  type                GrowthEventType
+  description         String?
+  sport               String?
+  league              String?
+  season              Int?
+  week                Int?
+  status              GrowthEventStatus           @default(SCHEDULED)
+  startsAt            DateTime
+  endsAt              DateTime?
+  homeTeamId          String?
+  awayTeamId          String?
+  venueId             String?
+  venueName           String?
+  neutralSite         Boolean                     @default(false)
+  publicUrl           String?
+  source              String?
+  sourceEventId       String?
+  sourceUpdatedAt     DateTime?
+  importedAt          DateTime?
+  sourceMetadata      Json?
+  marketId            String?
+  market              Market?                     @relation(fields: [marketId], references: [id], onDelete: SetNull)
+  homeTeam            Team?                       @relation("GrowthEventHomeTeam", fields: [homeTeamId], references: [id], onDelete: SetNull)
+  awayTeam            Team?                       @relation("GrowthEventAwayTeam", fields: [awayTeamId], references: [id], onDelete: SetNull)
+  venue               Venue?                      @relation(fields: [venueId], references: [id], onDelete: SetNull)
+  teams               Team[]                      @relation("TeamEvents")
+  campaigns           Campaign[]                  @relation("CampaignEvents")
+  activations         CampaignActivation[]
+  opportunities       Opportunity[]
+  recommendations     OpportunityRecommendation[]
+  generationRuns      GenerationRun[]
+  playerStats         NflPlayerEventStat[]
+  defenseStats        NflDefenseEventStat[]
+  ingestionRecords    SportsIngestionRecord[]
+  sportsQualityIssues SportsDataQualityIssue[]
+  createdAt           DateTime                    @default(now())
+  updatedAt           DateTime                    @updatedAt
 
   @@unique([source, sourceEventId])
   @@index([startsAt, type])
@@ -1004,6 +1034,8 @@ model SportsParticipant {
   aliases            ParticipantAlias[]
   rosterMemberships  SeasonRosterMembership[]
   qualityIssues      SportsDataQualityIssue[]
+  playerEventStats   NflPlayerEventStat[]
+  defenseEventStats  NflDefenseEventStat[]
   createdAt          DateTime                      @default(now())
   updatedAt          DateTime                      @updatedAt
 
@@ -1109,6 +1141,9 @@ model SportsIngestionRun {
   season          SportsSeason?            @relation(fields: [seasonId], references: [id], onDelete: SetNull)
   records         SportsIngestionRecord[]
   qualityIssues   SportsDataQualityIssue[]
+  playerStats     NflPlayerEventStat[]
+  defenseStats    NflDefenseEventStat[]
+  statRevisions   SportsStatRevision[]
   createdAt       DateTime                 @default(now())
   updatedAt       DateTime                 @updatedAt
 
@@ -1125,12 +1160,15 @@ model SportsIngestionRecord {
   rawData        Json
   normalizedData Json?
   participantId  String?
+  eventId        String?
   message        String?
   run            SportsIngestionRun          @relation(fields: [runId], references: [id], onDelete: Cascade)
+  event          GrowthEvent?                @relation(fields: [eventId], references: [id], onDelete: SetNull)
   createdAt      DateTime                    @default(now())
 
   @@unique([runId, rowNumber])
   @@index([runId, status])
+  @@index([eventId])
 }
 
 model SportsDataQualityIssue {
@@ -1139,15 +1177,108 @@ model SportsDataQualityIssue {
   status         SportsDataQualityIssueStatus @default(OPEN)
   participantId  String?
   ingestionRunId String?
+  eventId        String?
   summary        String
   details        Json?
   participant    SportsParticipant?           @relation(fields: [participantId], references: [id], onDelete: SetNull)
   ingestionRun   SportsIngestionRun?          @relation(fields: [ingestionRunId], references: [id], onDelete: SetNull)
+  event          GrowthEvent?                 @relation(fields: [eventId], references: [id], onDelete: SetNull)
   createdAt      DateTime                     @default(now())
   resolvedAt     DateTime?
 
   @@index([status, type, createdAt])
   @@index([participantId])
+  @@index([ingestionRunId])
+  @@index([eventId])
+}
+
+model NflPlayerEventStat {
+  id                  String               @id @default(cuid())
+  participantId       String
+  eventId             String
+  ingestionRunId      String
+  finality            SportsStatFinality   @default(PROVISIONAL)
+  passingYards        Int?
+  passingTouchdowns   Int?
+  interceptionsThrown Int?
+  rushingYards        Int?
+  rushingTouchdowns   Int?
+  receptions          Int?
+  receivingYards      Int?
+  receivingTouchdowns Int?
+  twoPointConversions Int?
+  fumblesLost         Int?
+  returnTouchdowns    Int?
+  sourceType          String
+  sourceLabel         String
+  sourceReference     String?
+  sourceTimestamp     DateTime?
+  importedAt          DateTime             @default(now())
+  participant         SportsParticipant    @relation(fields: [participantId], references: [id], onDelete: Restrict)
+  event               GrowthEvent          @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  ingestionRun        SportsIngestionRun   @relation(fields: [ingestionRunId], references: [id], onDelete: Restrict)
+  revisions           SportsStatRevision[]
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+
+  @@unique([participantId, eventId])
+  @@index([eventId, finality])
+  @@index([participantId, eventId])
+  @@index([ingestionRunId])
+}
+
+model NflDefenseEventStat {
+  id                     String               @id @default(cuid())
+  participantId          String
+  eventId                String
+  teamId                 String
+  ingestionRunId         String
+  finality               SportsStatFinality   @default(PROVISIONAL)
+  sacks                  Int?
+  defensiveInterceptions Int?
+  fumbleRecoveries       Int?
+  defensiveTouchdowns    Int?
+  specialTeamsTouchdowns Int?
+  safeties               Int?
+  blockedKicks           Int?
+  pointsAllowed          Int?
+  sourceType             String
+  sourceLabel            String
+  sourceReference        String?
+  sourceTimestamp        DateTime?
+  importedAt             DateTime             @default(now())
+  participant            SportsParticipant    @relation(fields: [participantId], references: [id], onDelete: Restrict)
+  event                  GrowthEvent          @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  team                   Team                 @relation(fields: [teamId], references: [id], onDelete: Restrict)
+  ingestionRun           SportsIngestionRun   @relation(fields: [ingestionRunId], references: [id], onDelete: Restrict)
+  revisions              SportsStatRevision[]
+  createdAt              DateTime             @default(now())
+  updatedAt              DateTime             @updatedAt
+
+  @@unique([participantId, eventId])
+  @@index([eventId, finality])
+  @@index([teamId, eventId])
+  @@index([ingestionRunId])
+}
+
+model SportsStatRevision {
+  id             String                    @id @default(cuid())
+  kind           SportsStatPerformanceKind
+  playerStatId   String?
+  defenseStatId  String?
+  ingestionRunId String
+  correctedById  String?
+  previousValues Json
+  newValues      Json
+  reason         String?
+  playerStat     NflPlayerEventStat?       @relation(fields: [playerStatId], references: [id], onDelete: Restrict)
+  defenseStat    NflDefenseEventStat?      @relation(fields: [defenseStatId], references: [id], onDelete: Restrict)
+  ingestionRun   SportsIngestionRun        @relation(fields: [ingestionRunId], references: [id], onDelete: Restrict)
+  correctedBy    User?                     @relation(fields: [correctedById], references: [id], onDelete: SetNull)
+  createdAt      DateTime                  @default(now())
+
+  @@index([playerStatId, createdAt])
+  @@index([defenseStatId, createdAt])
   @@index([ingestionRunId])
 }
 
