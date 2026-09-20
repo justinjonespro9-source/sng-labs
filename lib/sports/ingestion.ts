@@ -157,6 +157,9 @@ export async function applyRosterImport(runId: string, actorId?: string | null, 
     }
     await tx.sportsIngestionRun.update({ where: { id: run.id }, data: { status: "APPLIED", appliedAt: new Date(), createdById: actorId ?? run.createdById } });
     await tx.auditEvent.create({ data: { actorId: actorId ?? null, action: "SPORTS_ROSTER_IMPORT_APPLIED", entityType: "SportsIngestionRun", entityId: run.id, metadata: { checksum: run.checksum, sourceLabel: run.sourceLabel, rowCount: run.records.length } } });
+  }, {
+    maxWait: 30_000,
+    timeout: 600_000,
   });
   return prisma.sportsIngestionRun.findUniqueOrThrow({ where: { id: run.id }, include: { records: true } });
 }
