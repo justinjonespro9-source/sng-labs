@@ -10,7 +10,9 @@ async function main() {
   const pathArg = process.argv.find((arg) => arg.endsWith(".json")) ?? "data/sports/nfl-2026-rankeyeq-preview-roster.json";
   const raw = await readFile(resolve(pathArg), "utf8");
   const preview = await previewRosterImport(raw, null, prisma);
-  console.log(JSON.stringify({ mode: apply ? "APPLY" : "PREVIEW", runId: preview.id, status: preview.status, created: preview.createdCount, updated: preview.updatedCount, unchanged: preview.unchangedCount, unresolved: preview.unresolvedCount, errors: preview.errorCount }, null, 2));
+  const payload = JSON.parse(raw) as { contractVersion?: string; rows?: Array<{ teamAbbreviation?: string }> };
+  const teamCoverage = new Set(payload.rows?.map((row) => row.teamAbbreviation).filter(Boolean)).size;
+  console.log(JSON.stringify({ mode: apply ? "APPLY" : "PREVIEW", contractVersion: payload.contractVersion ?? "operator-json", teamCoverage, runId: preview.id, status: preview.status, created: preview.createdCount, updated: preview.updatedCount, unchanged: preview.unchangedCount, unresolved: preview.unresolvedCount, errors: preview.errorCount }, null, 2));
   if (apply) {
     const result = await applyRosterImport(preview.id, null, prisma);
     console.log(JSON.stringify({ runId: result.id, status: result.status, appliedAt: result.appliedAt }, null, 2));

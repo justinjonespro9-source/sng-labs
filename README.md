@@ -57,6 +57,25 @@ npm run db:migrate
 npm run db:seed
 ```
 
+## Sports Data roster export/import
+
+The Sports Data Hub does not connect to a product database at runtime. RankEyeQ produces a read-only, versioned NFL 2026 roster artifact, which an operator reviews before importing here.
+
+From the RankEyeQ repository:
+
+```bash
+npm run sng:export-roster -- ../sng-labs/data/sports/sng-nfl-2026-roster.json
+```
+
+From this repository, preview first and apply only after the counts, 32-team coverage, unresolved identities, and errors have been reviewed:
+
+```bash
+npm run sports:import-roster -- data/sports/sng-nfl-2026-roster.json
+npm run sports:import-roster -- data/sports/sng-nfl-2026-roster.json --apply
+```
+
+The export contains identity and roster data only. It does not contain weekly statistics, fantasy scoring, product mechanics, or credentials.
+
 Google OAuth should allow the production callback URL `https://www.snglabs.com/api/auth/callback/google`.
 
 ## Game-Day Engine V1

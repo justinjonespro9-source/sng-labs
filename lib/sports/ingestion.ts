@@ -1,6 +1,6 @@
 import { Prisma, type PrismaClient, type SportsIngestionRecordStatus } from "@prisma/client";
 import { resolveParticipantIdentity, type IdentityCandidate } from "./identity";
-import { checksumImport, rosterPayloadSchema, SPORTS_IMPORT_PARSER_VERSION } from "./import-schema";
+import { checksumImport, rosterPayloadSchema, SNG_ROSTER_EXPORT_VERSION, SPORTS_IMPORT_PARSER_VERSION } from "./import-schema";
 import { activeMembershipDeactivationWhere } from "./roster-history";
 
 type PlannedRow = {
@@ -38,6 +38,28 @@ async function loadCandidates(client: PrismaClient): Promise<IdentityCandidate[]
       position: membership.fantasyPosition,
     })),
   }));
+}
+
+async function resolveSupersededLeagueExportIssues(
+  client: PrismaClient | Prisma.TransactionClient,
+  input: { runId: string; seasonId: string; sourceLabel: string; contractVersion?: string },
+) {
+  if (input.contractVersion !== SNG_ROSTER_EXPORT_VERSION) return 0;
+  const result = await client.sportsDataQualityIssue.updateMany({
+    where: {
+      status: "OPEN",
+      ingestionRun: {
+        is: {
+          id: { not: input.runId },
+          seasonId: input.seasonId,
+          type: "SEASON_ROSTER",
+          sourceLabel: input.sourceLabel,
+        },
+      },
+    },
+    data: { status: "RESOLVED", resolvedAt: new Date() },
+  });
+  return result.count;
 }
 
 export async function previewRosterImport(rawPayload: string, actorId?: string | null, injectedClient?: PrismaClient) {
@@ -103,9 +125,20 @@ export async function applyRosterImport(runId: string, actorId?: string | null, 
   const run = await prisma.sportsIngestionRun.findUnique({ where: { id: runId }, include: { records: { orderBy: { rowNumber: "asc" } }, season: true } });
   if (!run || !run.season) throw new Error("Roster import preview not found");
   const season = run.season;
-  if (run.status === "APPLIED") return run;
-  if (run.unresolvedCount > 0 || run.errorCount > 0) throw new Error("Resolve all ambiguous or invalid rows before applying");
   const payload = rosterPayloadSchema.parse(JSON.parse(run.rawPayload));
+  if (run.status === "APPLIED") {
+    const resolvedCount = await resolveSupersededLeagueExportIssues(prisma, {
+      runId: run.id,
+      seasonId: season.id,
+      sourceLabel: run.sourceLabel,
+      contractVersion: payload.contractVersion,
+    });
+    if (resolvedCount > 0) {
+      await prisma.auditEvent.create({ data: { actorId: actorId ?? null, action: "SPORTS_DATA_QUALITY_ISSUES_SUPERSEDED", entityType: "SportsIngestionRun", entityId: run.id, metadata: { resolvedCount } } });
+    }
+    return run;
+  }
+  if (run.unresolvedCount > 0 || run.errorCount > 0) throw new Error("Resolve all ambiguous or invalid rows before applying");
 
   await prisma.$transaction(async (tx) => {
     for (const [index, row] of payload.rows.entries()) {
@@ -155,8 +188,17 @@ export async function applyRosterImport(runId: string, actorId?: string | null, 
       });
       if (record) await tx.sportsIngestionRecord.update({ where: { id: record.id }, data: { participantId } });
     }
+    const resolvedSupersededIssues = await resolveSupersededLeagueExportIssues(tx, {
+      runId: run.id,
+      seasonId: season.id,
+      sourceLabel: run.sourceLabel,
+      contractVersion: payload.contractVersion,
+    });
     await tx.sportsIngestionRun.update({ where: { id: run.id }, data: { status: "APPLIED", appliedAt: new Date(), createdById: actorId ?? run.createdById } });
-    await tx.auditEvent.create({ data: { actorId: actorId ?? null, action: "SPORTS_ROSTER_IMPORT_APPLIED", entityType: "SportsIngestionRun", entityId: run.id, metadata: { checksum: run.checksum, sourceLabel: run.sourceLabel, rowCount: run.records.length } } });
+    await tx.auditEvent.create({ data: { actorId: actorId ?? null, action: "SPORTS_ROSTER_IMPORT_APPLIED", entityType: "SportsIngestionRun", entityId: run.id, metadata: { checksum: run.checksum, sourceLabel: run.sourceLabel, rowCount: run.records.length, resolvedSupersededIssues } } });
+  }, {
+    maxWait: 30_000,
+    timeout: 600_000,
   });
   return prisma.sportsIngestionRun.findUniqueOrThrow({ where: { id: run.id }, include: { records: true } });
 }
