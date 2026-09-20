@@ -9,6 +9,7 @@ import {
   checksumStatImport,
   DEFENSE_STAT_FIELDS,
   eventStatPayloadSchema,
+  PLAYER_FACT_FIELDS,
   PLAYER_STAT_FIELDS,
   SPORTS_STAT_PARSER_VERSION,
   type EventStatRow,
@@ -58,15 +59,15 @@ async function loadCandidates(client: PrismaClient): Promise<IdentityCandidate[]
   }));
 }
 
-function factualSnapshot(row: EventStatRow): Record<string, number | null> {
-  const fields = row.kind === "PLAYER" ? PLAYER_STAT_FIELDS : DEFENSE_STAT_FIELDS;
-  const values = row as unknown as Record<string, number | null | undefined>;
+function factualSnapshot(row: EventStatRow): Record<string, string | number | null> {
+  const fields = row.kind === "PLAYER" ? PLAYER_FACT_FIELDS : DEFENSE_STAT_FIELDS;
+  const values = row as unknown as Record<string, string | number | null | undefined>;
   return Object.fromEntries(fields.map((field) => [field, values[field] ?? null]));
 }
 
-function existingSnapshot(existing: Record<string, unknown>, kind: EventStatRow["kind"]): Record<string, number | null> {
-  const fields = kind === "PLAYER" ? PLAYER_STAT_FIELDS : DEFENSE_STAT_FIELDS;
-  return Object.fromEntries(fields.map((field) => [field, typeof existing[field] === "number" ? existing[field] as number : null]));
+function existingSnapshot(existing: Record<string, unknown>, kind: EventStatRow["kind"]): Record<string, string | number | null> {
+  const fields = kind === "PLAYER" ? PLAYER_FACT_FIELDS : DEFENSE_STAT_FIELDS;
+  return Object.fromEntries(fields.map((field) => [field, typeof existing[field] === "number" || typeof existing[field] === "string" ? existing[field] as string | number : null]));
 }
 
 export async function previewEventStatImport(rawPayload: string, actorId?: string | null, injectedClient?: PrismaClient) {
@@ -108,6 +109,9 @@ export async function previewEventStatImport(rawPayload: string, actorId?: strin
     let participant: IdentityCandidate | undefined;
     let matchMethod = "canonical team defense";
     if (row.kind === "PLAYER") {
+      if (row.participationStatus === "UNKNOWN") {
+        return { ...base, eventId: event.id, status: "INVALID", message: `${row.canonicalName} has unknown participation; factual completeness is not established`, issueType: "INCOMPLETE_EVENT_STATS" };
+      }
       const resolution = resolveParticipantIdentity({
         provider: row.provider,
         externalId: row.externalId,
@@ -198,9 +202,9 @@ export async function applyEventStatImport(runId: string, actorId?: string | nul
         const existing = await tx.nflPlayerEventStat.findUnique({ where: { participantId_eventId: { participantId: record.participantId, eventId: record.eventId } } });
         if (existing) {
           await tx.sportsStatRevision.create({ data: { kind: "PLAYER", playerStatId: existing.id, ingestionRunId: run.id, correctedById: actorId ?? null, previousValues: jsonValue(existingSnapshot(existing as unknown as Record<string, unknown>, "PLAYER")), newValues: jsonValue(facts), reason: payload.correctionReason } });
-          await tx.nflPlayerEventStat.update({ where: { id: existing.id }, data: { ...facts, ...provenance } });
+          await tx.nflPlayerEventStat.update({ where: { id: existing.id }, data: { participationStatus: row.participationStatus, ...Object.fromEntries(PLAYER_STAT_FIELDS.map((field) => [field, row[field] ?? null])), ...provenance } });
         } else {
-          await tx.nflPlayerEventStat.create({ data: { participantId: record.participantId, eventId: record.eventId, ...facts, ...provenance } });
+          await tx.nflPlayerEventStat.create({ data: { participantId: record.participantId, eventId: record.eventId, participationStatus: row.participationStatus, ...Object.fromEntries(PLAYER_STAT_FIELDS.map((field) => [field, row[field] ?? null])), ...provenance } });
         }
       } else {
         const team = await tx.team.findUniqueOrThrow({ where: { league_abbreviation: { league: "NFL", abbreviation: row.teamAbbreviation } } });
@@ -213,6 +217,13 @@ export async function applyEventStatImport(runId: string, actorId?: string | nul
           await tx.nflDefenseEventStat.create({ data: { participantId: record.participantId, eventId: record.eventId, teamId: team.id, ...facts, ...provenance } });
         }
       }
+    }
+    if (payload.coverage.finality === "FINAL") {
+      const eventIds = [...new Set(run.records.map((record) => record.eventId).filter((id): id is string => Boolean(id)))];
+      await tx.growthEvent.updateMany({
+        where: { id: { in: eventIds }, status: { not: "CANCELLED" } },
+        data: { status: "FINAL" },
+      });
     }
     await tx.sportsIngestionRun.update({ where: { id: run.id }, data: { status: "APPLIED", appliedAt: new Date(), createdById: actorId ?? run.createdById } });
     await tx.auditEvent.create({ data: { actorId: actorId ?? null, action: payload.correctionReason ? "SPORTS_EVENT_STATS_CORRECTED" : "SPORTS_EVENT_STATS_APPLIED", entityType: "SportsIngestionRun", entityId: run.id, metadata: { checksum: run.checksum, sourceLabel: run.sourceLabel, rowCount: run.records.length, correctionReason: payload.correctionReason } } });
