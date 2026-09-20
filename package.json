@@ -15,6 +15,7 @@
     "game-day:import-nfl": "prisma generate && tsx scripts/import-nfl-schedule.ts",
     "sports:import-roster": "prisma generate && tsx scripts/import-sports-roster.ts",
     "sports:import-event-stats": "prisma generate && tsx scripts/import-sports-event-stats.ts",
+    "sports:prepare-nflverse-week": "prisma generate && tsx scripts/prepare-nflverse-week.ts",
     "sports:cleanup-preview-roster": "prisma generate && tsx scripts/cleanup-preview-roster-import.ts"
   },
   "dependencies": {
