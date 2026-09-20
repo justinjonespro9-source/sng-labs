@@ -304,6 +304,13 @@ enum SportsStatFinality {
   VOID
 }
 
+enum SportsPlayerParticipationStatus {
+  PARTICIPATED_WITH_STATS
+  PARTICIPATED_ZERO
+  DID_NOT_PARTICIPATE
+  UNKNOWN
+}
+
 enum SportsStatPerformanceKind {
   PLAYER
   TEAM_DEFENSE
@@ -1198,6 +1205,7 @@ model NflPlayerEventStat {
   eventId             String
   ingestionRunId      String
   finality            SportsStatFinality   @default(PROVISIONAL)
+  participationStatus SportsPlayerParticipationStatus @default(UNKNOWN)
   passingYards        Int?
   passingTouchdowns   Int?
   interceptionsThrown Int?
@@ -1223,6 +1231,7 @@ model NflPlayerEventStat {
 
   @@unique([participantId, eventId])
   @@index([eventId, finality])
+  @@index([eventId, participationStatus])
   @@index([participantId, eventId])
   @@index([ingestionRunId])
 }
