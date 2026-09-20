@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
 
-export const SPORTS_IMPORT_PARSER_VERSION = "sports-v1b-1";
+export const SPORTS_IMPORT_PARSER_VERSION = "sports-v1b-2";
 export const SNG_ROSTER_EXPORT_VERSION = "sng-sports-roster-v1";
 
 const NFL_TEAM_ABBREVIATION_ALIASES: Readonly<Record<string, string>> = {
@@ -64,6 +64,6 @@ export const rosterPayloadSchema = z.object({
 
 export type RosterPayload = z.infer<typeof rosterPayloadSchema>;
 
-export function checksumImport(rawPayload: string) {
-  return createHash("sha256").update(rawPayload).digest("hex");
+export function checksumImport(rawPayload: string, parserVersion = SPORTS_IMPORT_PARSER_VERSION) {
+  return createHash("sha256").update(parserVersion).update("\0").update(rawPayload).digest("hex");
 }

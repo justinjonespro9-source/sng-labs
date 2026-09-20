@@ -12,6 +12,7 @@ describe("sports roster import contract", () => {
     const raw = JSON.stringify({ hello: "world" });
     expect(checksumImport(raw)).toBe(checksumImport(raw));
     expect(checksumImport(raw)).not.toBe(checksumImport(`${raw} `));
+    expect(checksumImport(raw, "parser-v1")).not.toBe(checksumImport(raw, "parser-v2"));
   });
 
   it("normalizes known source abbreviations to the canonical SNG team identity", () => {
