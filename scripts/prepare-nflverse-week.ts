@@ -41,7 +41,7 @@ async function main() {
       playerSourceReference: "https://github.com/nflverse/nflverse-data/releases/download/stats_player/stats_player_week_2026.csv",
       teamSourceReference: "https://github.com/nflverse/nflverse-data/releases/download/stats_team/stats_team_week_2026.csv",
       snapSourceReference: "https://github.com/nflverse/nflverse-data/releases/download/snap_counts/snap_counts_2026.csv",
-      rosterSourceReference: "https://github.com/nflverse/nflverse-data/releases/download/roster_weekly/roster_weekly_2026.csv",
+      rosterSourceReference: "https://github.com/nflverse/nflverse-data/releases/download/weekly_rosters/roster_weekly_2026.csv",
       sourceTimestamp,
     });
     await mkdir(outputDir, { recursive: true });
