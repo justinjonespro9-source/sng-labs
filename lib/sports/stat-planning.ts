@@ -1,8 +1,10 @@
 export type FactPlanStatus = "CREATE" | "UNCHANGED" | "UPDATE" | "CONFLICT";
 
+export type FactualValue = string | number | null;
+
 export function classifyFactChange(input: {
-  existingFacts?: Record<string, number | null>;
-  incomingFacts: Record<string, number | null>;
+  existingFacts?: Record<string, FactualValue>;
+  incomingFacts: Record<string, FactualValue>;
   existingFinality?: string;
   incomingFinality: string;
   correctionReason?: string;
