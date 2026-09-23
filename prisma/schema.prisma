@@ -322,6 +322,36 @@ enum SportsDataQualityIssueStatus {
   DISMISSED
 }
 
+enum SportsScoringRulesetStatus {
+  DRAFT
+  SHADOW
+  ACTIVE
+  RETIRED
+}
+
+enum SportsScoringRunMode {
+  PREVIEW
+  SHADOW
+  PUBLISHED
+}
+
+enum SportsScoringRunStatus {
+  PENDING
+  COMPLETED
+  FAILED
+}
+
+enum SportsDerivedResultFinality {
+  PROVISIONAL
+  FINAL
+  SUPERSEDED
+  VOID
+}
+
+enum SportsWeeklyResultCategory {
+  POSITION
+}
+
 model User {
   id                      String                      @id @default(cuid())
   name                    String?
@@ -338,6 +368,7 @@ model User {
   reviewedRecommendations OpportunityRecommendation[] @relation("RecommendationReviewer")
   sportsIngestionRuns     SportsIngestionRun[]
   sportsStatRevisions     SportsStatRevision[]
+  sportsScoringRuns       SportsScoringRun[]
   createdAt               DateTime                    @default(now())
   updatedAt               DateTime                    @updatedAt
 }
@@ -753,46 +784,48 @@ model Venue {
 }
 
 model GrowthEvent {
-  id                  String                      @id @default(cuid())
-  key                 String?                     @unique
-  name                String
-  type                GrowthEventType
-  description         String?
-  sport               String?
-  league              String?
-  season              Int?
-  week                Int?
-  status              GrowthEventStatus           @default(SCHEDULED)
-  startsAt            DateTime
-  endsAt              DateTime?
-  homeTeamId          String?
-  awayTeamId          String?
-  venueId             String?
-  venueName           String?
-  neutralSite         Boolean                     @default(false)
-  publicUrl           String?
-  source              String?
-  sourceEventId       String?
-  sourceUpdatedAt     DateTime?
-  importedAt          DateTime?
-  sourceMetadata      Json?
-  marketId            String?
-  market              Market?                     @relation(fields: [marketId], references: [id], onDelete: SetNull)
-  homeTeam            Team?                       @relation("GrowthEventHomeTeam", fields: [homeTeamId], references: [id], onDelete: SetNull)
-  awayTeam            Team?                       @relation("GrowthEventAwayTeam", fields: [awayTeamId], references: [id], onDelete: SetNull)
-  venue               Venue?                      @relation(fields: [venueId], references: [id], onDelete: SetNull)
-  teams               Team[]                      @relation("TeamEvents")
-  campaigns           Campaign[]                  @relation("CampaignEvents")
-  activations         CampaignActivation[]
-  opportunities       Opportunity[]
-  recommendations     OpportunityRecommendation[]
-  generationRuns      GenerationRun[]
-  playerStats         NflPlayerEventStat[]
-  defenseStats        NflDefenseEventStat[]
-  ingestionRecords    SportsIngestionRecord[]
-  sportsQualityIssues SportsDataQualityIssue[]
-  createdAt           DateTime                    @default(now())
-  updatedAt           DateTime                    @updatedAt
+  id                    String                       @id @default(cuid())
+  key                   String?                      @unique
+  name                  String
+  type                  GrowthEventType
+  description           String?
+  sport                 String?
+  league                String?
+  season                Int?
+  week                  Int?
+  status                GrowthEventStatus            @default(SCHEDULED)
+  startsAt              DateTime
+  endsAt                DateTime?
+  homeTeamId            String?
+  awayTeamId            String?
+  venueId               String?
+  venueName             String?
+  neutralSite           Boolean                      @default(false)
+  publicUrl             String?
+  source                String?
+  sourceEventId         String?
+  sourceUpdatedAt       DateTime?
+  importedAt            DateTime?
+  sourceMetadata        Json?
+  marketId              String?
+  market                Market?                      @relation(fields: [marketId], references: [id], onDelete: SetNull)
+  homeTeam              Team?                        @relation("GrowthEventHomeTeam", fields: [homeTeamId], references: [id], onDelete: SetNull)
+  awayTeam              Team?                        @relation("GrowthEventAwayTeam", fields: [awayTeamId], references: [id], onDelete: SetNull)
+  venue                 Venue?                       @relation(fields: [venueId], references: [id], onDelete: SetNull)
+  teams                 Team[]                       @relation("TeamEvents")
+  campaigns             Campaign[]                   @relation("CampaignEvents")
+  activations           CampaignActivation[]
+  opportunities         Opportunity[]
+  recommendations       OpportunityRecommendation[]
+  generationRuns        GenerationRun[]
+  playerStats           NflPlayerEventStat[]
+  defenseStats          NflDefenseEventStat[]
+  ingestionRecords      SportsIngestionRecord[]
+  sportsQualityIssues   SportsDataQualityIssue[]
+  scoringInputSnapshots SportsScoringInputSnapshot[]
+  derivedPerformances   SportsDerivedPerformance[]
+  createdAt             DateTime                     @default(now())
+  updatedAt             DateTime                     @updatedAt
 
   @@unique([source, sourceEventId])
   @@index([startsAt, type])
@@ -1016,35 +1049,40 @@ model AuditEvent {
 }
 
 model SportsSeason {
-  id            String                   @id @default(cuid())
-  league        String
-  year          Int
-  label         String
-  active        Boolean                  @default(false)
-  participants  SeasonRosterMembership[]
-  ingestionRuns SportsIngestionRun[]
-  createdAt     DateTime                 @default(now())
-  updatedAt     DateTime                 @updatedAt
+  id               String                   @id @default(cuid())
+  league           String
+  year             Int
+  label            String
+  active           Boolean                  @default(false)
+  participants     SeasonRosterMembership[]
+  ingestionRuns    SportsIngestionRun[]
+  scoringRuns      SportsScoringRun[]
+  weeklyResultSets SportsWeeklyResultSet[]
+  createdAt        DateTime                 @default(now())
+  updatedAt        DateTime                 @updatedAt
 
   @@unique([league, year])
   @@index([active, league, year])
 }
 
 model SportsParticipant {
-  id                 String                        @id @default(cuid())
-  kind               SportsParticipantKind
-  canonicalName      String
-  active             Boolean                       @default(true)
-  player             Player?
-  teamDefense        TeamDefense?
-  externalIdentities ParticipantExternalIdentity[]
-  aliases            ParticipantAlias[]
-  rosterMemberships  SeasonRosterMembership[]
-  qualityIssues      SportsDataQualityIssue[]
-  playerEventStats   NflPlayerEventStat[]
-  defenseEventStats  NflDefenseEventStat[]
-  createdAt          DateTime                      @default(now())
-  updatedAt          DateTime                      @updatedAt
+  id                    String                        @id @default(cuid())
+  kind                  SportsParticipantKind
+  canonicalName         String
+  active                Boolean                       @default(true)
+  player                Player?
+  teamDefense           TeamDefense?
+  externalIdentities    ParticipantExternalIdentity[]
+  aliases               ParticipantAlias[]
+  rosterMemberships     SeasonRosterMembership[]
+  qualityIssues         SportsDataQualityIssue[]
+  playerEventStats      NflPlayerEventStat[]
+  defenseEventStats     NflDefenseEventStat[]
+  scoringInputSnapshots SportsScoringInputSnapshot[]
+  derivedPerformances   SportsDerivedPerformance[]
+  weeklyResultEntries   SportsWeeklyResultEntry[]
+  createdAt             DateTime                      @default(now())
+  updatedAt             DateTime                      @updatedAt
 
   @@index([kind, canonicalName])
   @@index([active, kind])
@@ -1200,11 +1238,11 @@ model SportsDataQualityIssue {
 }
 
 model NflPlayerEventStat {
-  id                  String               @id @default(cuid())
+  id                  String                          @id @default(cuid())
   participantId       String
   eventId             String
   ingestionRunId      String
-  finality            SportsStatFinality   @default(PROVISIONAL)
+  finality            SportsStatFinality              @default(PROVISIONAL)
   participationStatus SportsPlayerParticipationStatus @default(UNKNOWN)
   passingYards        Int?
   passingTouchdowns   Int?
@@ -1221,13 +1259,13 @@ model NflPlayerEventStat {
   sourceLabel         String
   sourceReference     String?
   sourceTimestamp     DateTime?
-  importedAt          DateTime             @default(now())
-  participant         SportsParticipant    @relation(fields: [participantId], references: [id], onDelete: Restrict)
-  event               GrowthEvent          @relation(fields: [eventId], references: [id], onDelete: Restrict)
-  ingestionRun        SportsIngestionRun   @relation(fields: [ingestionRunId], references: [id], onDelete: Restrict)
+  importedAt          DateTime                        @default(now())
+  participant         SportsParticipant               @relation(fields: [participantId], references: [id], onDelete: Restrict)
+  event               GrowthEvent                     @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  ingestionRun        SportsIngestionRun              @relation(fields: [ingestionRunId], references: [id], onDelete: Restrict)
   revisions           SportsStatRevision[]
-  createdAt           DateTime             @default(now())
-  updatedAt           DateTime             @updatedAt
+  createdAt           DateTime                        @default(now())
+  updatedAt           DateTime                        @updatedAt
 
   @@unique([participantId, eventId])
   @@index([eventId, finality])
@@ -1289,6 +1327,182 @@ model SportsStatRevision {
   @@index([playerStatId, createdAt])
   @@index([defenseStatId, createdAt])
   @@index([ingestionRunId])
+}
+
+model SportsScoringRuleset {
+  id                   String                     @id @default(cuid())
+  code                 String
+  version              Int
+  displayName          String
+  sport                String
+  league               String?
+  status               SportsScoringRulesetStatus @default(DRAFT)
+  definition           Json
+  definitionChecksum   String                     @unique
+  engineFamily         String
+  minimumEngineVersion String
+  publishedAt          DateTime?
+  scoringRuns          SportsScoringRun[]
+  derivedPerformances  SportsDerivedPerformance[]
+  weeklyResultSets     SportsWeeklyResultSet[]
+  createdAt            DateTime                   @default(now())
+  updatedAt            DateTime                   @updatedAt
+
+  @@unique([code, version])
+  @@index([sport, league, status])
+}
+
+model SportsScoringRun {
+  id                  String                       @id @default(cuid())
+  createdById         String?
+  seasonId            String
+  rulesetId           String
+  mode                SportsScoringRunMode
+  status              SportsScoringRunStatus       @default(PENDING)
+  sport               String
+  league              String
+  seasonYear          Int
+  week                Int
+  engineVersion       String
+  rulesetChecksum     String
+  inputSetChecksum    String
+  runFingerprint      String                       @unique
+  expectedInputCount  Int                          @default(0)
+  calculatedCount     Int                          @default(0)
+  resultSetCount      Int                          @default(0)
+  unresolvedCount     Int                          @default(0)
+  blockedCount        Int                          @default(0)
+  errorCount          Int                          @default(0)
+  summary             Json?
+  completedAt         DateTime?
+  createdBy           User?                        @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  season              SportsSeason                 @relation(fields: [seasonId], references: [id], onDelete: Restrict)
+  ruleset             SportsScoringRuleset         @relation(fields: [rulesetId], references: [id], onDelete: Restrict)
+  inputSnapshots      SportsScoringInputSnapshot[]
+  derivedPerformances SportsDerivedPerformance[]
+  weeklyResultSets    SportsWeeklyResultSet[]
+  createdAt           DateTime                     @default(now())
+  updatedAt           DateTime                     @updatedAt
+
+  @@index([seasonId, week, mode, createdAt])
+  @@index([rulesetId, status, createdAt])
+}
+
+model SportsScoringInputSnapshot {
+  id                        String                    @id @default(cuid())
+  scoringRunId              String
+  participantId             String
+  eventId                   String
+  performanceKind           SportsStatPerformanceKind
+  sourceEntityType          String
+  sourceEntityId            String
+  sourceIngestionRunId      String
+  sourceRevisionId          String?
+  sourceRevisionFingerprint String
+  sourceFinality            SportsStatFinality
+  normalizedFacts           Json
+  inputChecksum             String
+  capturedAt                DateTime                  @default(now())
+  scoringRun                SportsScoringRun          @relation(fields: [scoringRunId], references: [id], onDelete: Cascade)
+  participant               SportsParticipant         @relation(fields: [participantId], references: [id], onDelete: Restrict)
+  event                     GrowthEvent               @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  derivedPerformance        SportsDerivedPerformance?
+  createdAt                 DateTime                  @default(now())
+
+  @@unique([scoringRunId, sourceEntityType, sourceEntityId])
+  @@index([participantId, eventId])
+  @@index([sourceEntityType, sourceEntityId, sourceRevisionFingerprint])
+  @@index([inputChecksum])
+}
+
+model SportsDerivedPerformance {
+  id                  String                      @id @default(cuid())
+  scoringRunId        String
+  inputSnapshotId     String                      @unique
+  participantId       String
+  eventId             String
+  rulesetId           String
+  engineVersion       String
+  rulesetChecksum     String
+  pointsHundredths    Int
+  fantasyPoints       Decimal                     @db.Decimal(10, 2)
+  componentBreakdown  Json
+  finality            SportsDerivedResultFinality
+  resultFingerprint   String
+  calculatedAt        DateTime                    @default(now())
+  supersedesId        String?
+  scoringRun          SportsScoringRun            @relation(fields: [scoringRunId], references: [id], onDelete: Cascade)
+  inputSnapshot       SportsScoringInputSnapshot  @relation(fields: [inputSnapshotId], references: [id], onDelete: Restrict)
+  participant         SportsParticipant           @relation(fields: [participantId], references: [id], onDelete: Restrict)
+  event               GrowthEvent                 @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  ruleset             SportsScoringRuleset        @relation(fields: [rulesetId], references: [id], onDelete: Restrict)
+  supersedes          SportsDerivedPerformance?   @relation("DerivedPerformanceLineage", fields: [supersedesId], references: [id], onDelete: Restrict)
+  supersededBy        SportsDerivedPerformance[]  @relation("DerivedPerformanceLineage")
+  weeklyResultEntries SportsWeeklyResultEntry[]
+  createdAt           DateTime                    @default(now())
+
+  @@unique([scoringRunId, resultFingerprint])
+  @@index([participantId, eventId, calculatedAt])
+  @@index([rulesetId, finality, calculatedAt])
+  @@index([supersedesId])
+}
+
+model SportsWeeklyResultSet {
+  id                       String                      @id @default(cuid())
+  scoringRunId             String
+  seasonId                 String
+  rulesetId                String
+  sport                    String
+  league                   String
+  seasonYear               Int
+  week                     Int
+  category                 SportsWeeklyResultCategory  @default(POSITION)
+  positionCode             String
+  eligibilityPolicyVersion String
+  inputSetChecksum         String
+  resultSetChecksum        String                      @unique
+  finality                 SportsDerivedResultFinality
+  fieldSize                Int
+  sourceComplete           Boolean
+  generatedAt              DateTime                    @default(now())
+  publishedAt              DateTime?
+  scoringRun               SportsScoringRun            @relation(fields: [scoringRunId], references: [id], onDelete: Cascade)
+  season                   SportsSeason                @relation(fields: [seasonId], references: [id], onDelete: Restrict)
+  ruleset                  SportsScoringRuleset        @relation(fields: [rulesetId], references: [id], onDelete: Restrict)
+  entries                  SportsWeeklyResultEntry[]
+  createdAt                DateTime                    @default(now())
+
+  @@unique([scoringRunId, category, positionCode])
+  @@index([seasonId, week, positionCode])
+  @@index([rulesetId, finality, generatedAt])
+}
+
+model SportsWeeklyResultEntry {
+  id                   String                   @id @default(cuid())
+  resultSetId          String
+  participantId        String
+  derivedPerformanceId String
+  positionCode         String
+  pointsHundredths     Int
+  fantasyPoints        Decimal                  @db.Decimal(10, 2)
+  competitionRank      Int
+  tieGroupKey          String
+  tieGroupSize         Int
+  displayOrdinal       Int
+  fieldSize            Int
+  isTop3               Boolean
+  isTop10              Boolean
+  isTop15              Boolean
+  eligibilityEvidence  Json
+  resultSet            SportsWeeklyResultSet    @relation(fields: [resultSetId], references: [id], onDelete: Cascade)
+  participant          SportsParticipant        @relation(fields: [participantId], references: [id], onDelete: Restrict)
+  derivedPerformance   SportsDerivedPerformance @relation(fields: [derivedPerformanceId], references: [id], onDelete: Restrict)
+  createdAt            DateTime                 @default(now())
+
+  @@unique([resultSetId, participantId])
+  @@index([resultSetId, competitionRank, displayOrdinal])
+  @@index([participantId, resultSetId])
+  @@index([derivedPerformanceId])
 }
 
 model GenerationRun {

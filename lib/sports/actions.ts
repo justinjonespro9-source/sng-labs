@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { requireCommandCenterUser } from "@/lib/auth/session";
 import { applyRosterImport, previewRosterImport } from "./ingestion";
 import { applyEventStatImport, previewEventStatImport } from "./stat-ingestion";
+import { calculateNflWeekPreview } from "./scoring/workflow";
 
 async function requireSportsOperator() {
   const user = await requireCommandCenterUser();
@@ -44,4 +45,14 @@ export async function applySportsEventStatImport(formData: FormData) {
   await applyEventStatImport(runId, user.id);
   revalidatePath("/command-center/sports");
   redirect(`/command-center/sports?view=imports&run=${runId}`);
+}
+
+export async function previewSportsScoring(formData: FormData) {
+  const user = await requireSportsOperator();
+  const year = Number(formData.get("year"));
+  const week = Number(formData.get("week"));
+  if (!Number.isInteger(year) || !Number.isInteger(week) || week < 1) throw new Error("A valid season year and week are required");
+  const { run } = await calculateNflWeekPreview({ year, week, mode: "PREVIEW", createdById: user.id });
+  revalidatePath("/command-center/sports");
+  redirect(`/command-center/sports?view=scoring&scoringRun=${run.id}`);
 }

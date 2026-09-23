@@ -16,7 +16,8 @@
     "sports:import-roster": "prisma generate && tsx scripts/import-sports-roster.ts",
     "sports:import-event-stats": "prisma generate && tsx scripts/import-sports-event-stats.ts",
     "sports:prepare-nflverse-week": "prisma generate && tsx scripts/prepare-nflverse-week.ts",
-    "sports:cleanup-preview-roster": "prisma generate && tsx scripts/cleanup-preview-roster-import.ts"
+    "sports:cleanup-preview-roster": "prisma generate && tsx scripts/cleanup-preview-roster-import.ts",
+    "sports:preview-scoring": "prisma generate && node --conditions react-server --import tsx scripts/preview-nfl-scoring.ts"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.3",
