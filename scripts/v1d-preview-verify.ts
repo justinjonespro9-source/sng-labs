@@ -4,6 +4,7 @@ import { writeFile } from "node:fs/promises";
 const expectedBranch = "codex/v1d-canonical-scoring-recovery";
 const expectedHost = "ep-wispy-dust-aw8e7v4o-pooler.c-12.us-east-1.aws.neon.tech";
 
+async function main() {
 if (process.env.VERCEL_ENV !== "preview" || process.env.VERCEL_GIT_COMMIT_REF !== expectedBranch) {
   console.log("V1D Preview verification skipped outside the authorized recovery Preview branch.");
 } else {
@@ -26,3 +27,9 @@ if (process.env.VERCEL_ENV !== "preview" || process.env.VERCEL_GIT_COMMIT_REF !=
     await writeFile("public/v1d-preview-verification.json", JSON.stringify({ status: "PASSED", sanitizedTarget: `${target.hostname}${target.pathname}`, results }, null, 2));
   }
 }
+}
+
+main().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});
