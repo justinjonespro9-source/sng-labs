@@ -125,7 +125,7 @@ export async function applyScheduleRun(prisma: PrismaClient, runId: string) {
       teams.set(item.key, team);
       await tx.teamExternalIdentity.upsert({ where: { provider_externalId: { provider: pkg.source.provider, externalId: item.externalId } }, create: { teamId: team.id, provider: pkg.source.provider, externalId: item.externalId, sourceLabel: pkg.source.label, sourceReference: pkg.source.reference, verifiedAt: new Date(pkg.source.review.reviewedAt) }, update: { teamId: team.id, sourceLabel: pkg.source.label, sourceReference: pkg.source.reference, verifiedAt: new Date(pkg.source.review.reviewedAt) } });
     }
-    for (const item of pkg.events) {
+    for (const [eventIndex, item] of pkg.events.entries()) {
       const home = teams.get(item.homeTeamKey)!;
       const away = teams.get(item.awayTeamKey)!;
       const venue = venues.get(item.venueKey)!;
@@ -133,6 +133,7 @@ export async function applyScheduleRun(prisma: PrismaClient, runId: string) {
       const data = { name: `${away.name} at ${home.name}`, type: "GAME" as const, sport: pkg.sport.name, league: pkg.league.code, leagueId: league.id, season: pkg.season.year, seasonId: season.id, week: item.week, status: item.status, startsAt: new Date(item.startsAt), homeTeamId: home.id, awayTeamId: away.id, venueId: venue.id, venueName: venue.name, neutralSite: item.neutralSite, marketId: item.neutralSite ? venue.marketId : home.marketId, source: pkg.source.provider, sourceEventId: item.externalId, sourceUpdatedAt: new Date(pkg.source.publishedAt), importedAt: new Date(), sourceMetadata: { importerVersion: SPORTS_INTELLIGENCE_IMPORTER_VERSION, sourceLabel: pkg.source.label, sourceReference: pkg.source.reference, acquiredAt: pkg.source.acquiredAt, reviewedAt: pkg.source.review.reviewedAt, reviewer: pkg.source.review.reviewer, timeTbd: item.timeTbd, sourceStatus: item.sourceStatus } };
       const event = identity ? await tx.growthEvent.update({ where: { id: identity.eventId }, data: { ...data, teams: { set: [{ id: home.id }, { id: away.id }] } } }) : await tx.growthEvent.create({ data: { key: `${pkg.league.code.toLowerCase()}-${pkg.season.year}-${item.externalId.toLowerCase()}`, ...data, teams: { connect: [{ id: home.id }, { id: away.id }] } } });
       if (!identity) await tx.growthEventExternalIdentity.create({ data: { eventId: event.id, provider: pkg.source.provider, externalId: item.externalId, sourceLabel: pkg.source.label, sourceReference: pkg.source.reference, verifiedAt: new Date(pkg.source.review.reviewedAt) } });
+      await tx.sportsIngestionRecord.update({ where: { runId_rowNumber: { runId: run.id, rowNumber: eventIndex + 1 } }, data: { eventId: event.id } });
     }
     await tx.sportsIngestionRun.update({ where: { id: run.id }, data: { leagueId: league.id, seasonId: season.id, status: "APPLIED", appliedAt: new Date() } });
     await tx.auditEvent.create({ data: { action: "sports_intelligence.schedule.apply", entityType: "SportsIngestionRun", entityId: run.id, metadata: { checksum: run.checksum, league: pkg.league.code, season: pkg.season.year, events: pkg.events.length } } });

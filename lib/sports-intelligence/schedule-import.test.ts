@@ -1,7 +1,9 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { schedulePackageChecksum, stableJson, validateSchedulePackage } from "./schedule-import";
+import { vi } from "vitest";
+import type { PrismaClient } from "@prisma/client";
+import { applyScheduleRun, schedulePackageChecksum, stableJson, validateSchedulePackage } from "./schedule-import";
 
 function fixture(name: string) {
   return JSON.parse(readFileSync(resolve(process.cwd(), "data/sports-intelligence", name), "utf8")) as Record<string, unknown>;
@@ -44,5 +46,16 @@ describe("Sports Intelligence schedule packages", () => {
     expect(parsed.league.code).toBe("NCAAF");
     expect(parsed.teams.find((team) => team.key === "minnesota-golden-gophers-football")?.subdivision).toBe("FBS");
     expect(parsed.teams.find((team) => team.key === "eastern-illinois-panthers-football")?.subdivision).toBe("FCS");
+  });
+
+  it("reuses an already applied schedule run without opening a write transaction", async () => {
+    const transaction = vi.fn();
+    const prisma = {
+      sportsIngestionRun: { findUnique: vi.fn().mockResolvedValue({ id: "run-1", type: "SCHEDULE", status: "APPLIED" }) },
+      $transaction: transaction,
+    } as unknown as PrismaClient;
+
+    await expect(applyScheduleRun(prisma, "run-1")).resolves.toEqual({ runId: "run-1", reused: true });
+    expect(transaction).not.toHaveBeenCalled();
   });
 });
