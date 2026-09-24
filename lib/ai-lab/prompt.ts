@@ -21,7 +21,7 @@ export function buildGenerationInput(context: ResolvedGenerationContext) {
     "BRAND STRATEGY (authoritative):",
     JSON.stringify({ brand: context.brand, brandBrain: context.brandBrain }, null, 2),
     "EXECUTION CONTEXT:",
-    JSON.stringify({ growthProgram: context.growthProgram, campaign: context.campaign, activation: context.activation, opportunity: context.opportunity, audience: context.audience, relationship: context.relationship, channel: context.channel }, null, 2),
+    JSON.stringify({ growthProgram: context.growthProgram, campaign: context.campaign, activation: context.activation, event: context.event, opportunity: context.opportunity, audience: context.audience, relationship: context.relationship, channel: context.channel }, null, 2),
     "TRUST AND OPERATOR CONTEXT:",
     JSON.stringify({ trust: context.trust, operatorContext: context.operatorContext }, null, 2),
     "OUTPUT CONTRACT:",

@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "source": {
+    "provider": "nhl-official",
+    "label": "Minnesota Wild — 2026-27 official schedule release (operator reviewed opener)",
+    "reference": "https://www.nhl.com/wild/news/minnesota-wild-announces-2026-27-regular-season-schedule",
+    "publishedAt": "2026-07-16T12:00:00.000Z",
+    "acquiredAt": "2026-09-24T12:00:00.000Z",
+    "review": { "reviewer": "SNG operator", "reviewedAt": "2026-09-24T12:00:00.000Z" }
+  },
+  "sport": { "key": "ice-hockey", "code": "HOCKEY", "name": "Ice Hockey" },
+  "league": { "key": "nhl", "code": "NHL", "name": "National Hockey League" },
+  "season": { "year": 2026, "label": "2026-27 NHL" },
+  "markets": [
+    { "key": "minnesota-twin-cities", "name": "Minnesota / Twin Cities", "region": "Minnesota", "country": "US" },
+    { "key": "nashville-tennessee", "name": "Nashville, Tennessee", "region": "Tennessee", "country": "US" }
+  ],
+  "venues": [
+    { "key": "grand-casino-arena", "name": "Grand Casino Arena", "city": "Saint Paul", "state": "MN", "country": "US", "timeZone": "America/Chicago", "marketKey": "minnesota-twin-cities", "externalId": "grand-casino-arena" },
+    { "key": "bridgestone-arena", "name": "Bridgestone Arena", "city": "Nashville", "state": "TN", "country": "US", "timeZone": "America/Chicago", "marketKey": "nashville-tennessee", "externalId": "bridgestone-arena" }
+  ],
+  "teams": [
+    { "key": "minnesota-wild", "name": "Minnesota Wild", "abbreviation": "MIN", "marketKey": "minnesota-twin-cities", "homeVenueKey": "grand-casino-arena", "externalId": "MIN" },
+    { "key": "nashville-predators", "name": "Nashville Predators", "abbreviation": "NSH", "marketKey": "nashville-tennessee", "homeVenueKey": "bridgestone-arena", "externalId": "NSH" }
+  ],
+  "events": [
+    { "externalId": "min-2026-10-01-nsh", "homeTeamKey": "nashville-predators", "awayTeamKey": "minnesota-wild", "venueKey": "bridgestone-arena", "startsAt": "2026-10-02T00:00:00.000Z", "timeTbd": false, "neutralSite": false, "status": "SCHEDULED", "week": 1 }
+  ]
+}

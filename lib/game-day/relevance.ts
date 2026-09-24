@@ -22,9 +22,9 @@ export type RelevanceEvent = {
   startsAt: Date;
   status: string;
   neutralSite: boolean;
-  market: { id: string; name: string } | null;
-  venue: { id: string; key: string; name: string; stadiumSlopVenueKey: string | null } | null;
-  homeTeam: { id: string; name: string; brands: { key: string }[] } | null;
+  market: { id: string; name: string; relevancePolicies?: { brand: { key: string } }[] } | null;
+  venue: { id: string; key: string; name: string; stadiumSlopVenueKey: string | null; relevancePolicies?: { brand: { key: string } }[] } | null;
+  homeTeam: { id: string; name: string; brands: { key: string }[]; relevancePolicies?: { brand: { key: string } }[] } | null;
   awayTeam: { id: string; name: string } | null;
   activations: { id: string; campaignId: string; teamId: string | null; marketId: string | null; venueId: string | null; venueName: string | null; brands: { key: string }[]; campaign: { id: string; name: string; status: string; brands: { key: string }[] } }[];
 };
@@ -56,7 +56,8 @@ export function evaluateEventRelevance(event: RelevanceEvent): RecommendationCan
   const results: RecommendationCandidate[] = [];
   const stadiumActivation = matchingActivation(event, "stadium-slop");
 
-  if (event.venue?.stadiumSlopVenueKey) {
+  const stadiumSlopVenueRelevant = Boolean(event.venue?.stadiumSlopVenueKey || event.venue?.relevancePolicies?.some((policy) => policy.brand.key === "stadium-slop"));
+  if (stadiumSlopVenueRelevant) {
     const hasStrategicContext = Boolean(stadiumActivation);
     results.push({
       brandKey: "stadium-slop",
@@ -77,8 +78,9 @@ export function evaluateEventRelevance(event: RelevanceEvent): RecommendationCan
   }
 
   const teamM8tesActivation = matchingActivation(event, "team-m8tes");
-  const teamM8tesTeamRelevant = event.homeTeam?.brands.some((brand) => brand.key === "team-m8tes") ?? false;
-  if (!event.neutralSite && (teamM8tesActivation || teamM8tesTeamRelevant)) {
+  const teamM8tesTeamRelevant = Boolean(event.homeTeam?.relevancePolicies?.some((policy) => policy.brand.key === "team-m8tes") || event.homeTeam?.brands.some((brand) => brand.key === "team-m8tes"));
+  const teamM8tesMarketRelevant = event.market?.relevancePolicies?.some((policy) => policy.brand.key === "team-m8tes") ?? false;
+  if (!event.neutralSite && (teamM8tesActivation || teamM8tesTeamRelevant || teamM8tesMarketRelevant)) {
     results.push({
       brandKey: "team-m8tes",
       eventId: event.id,

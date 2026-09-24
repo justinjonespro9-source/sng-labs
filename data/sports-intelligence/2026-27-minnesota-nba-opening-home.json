@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "source": {
+    "provider": "nba-official",
+    "label": "NBA.com — Minnesota Timberwolves 2026-27 schedule (operator reviewed opening home set)",
+    "reference": "https://www.nba.com/team/1610612750/schedule",
+    "publishedAt": "2026-08-15T12:00:00.000Z",
+    "acquiredAt": "2026-09-24T12:00:00.000Z",
+    "review": { "reviewer": "SNG operator", "reviewedAt": "2026-09-24T12:00:00.000Z" }
+  },
+  "sport": { "key": "basketball", "code": "BASKETBALL", "name": "Basketball" },
+  "league": { "key": "nba", "code": "NBA", "name": "National Basketball Association" },
+  "season": { "year": 2026, "label": "2026-27 NBA" },
+  "markets": [
+    { "key": "minnesota-twin-cities", "name": "Minnesota / Twin Cities", "region": "Minnesota", "country": "US" },
+    { "key": "toronto-ontario", "name": "Toronto, Ontario", "region": "Ontario", "country": "CA" },
+    { "key": "san-francisco-bay-area", "name": "San Francisco Bay Area", "region": "California", "country": "US" },
+    { "key": "los-angeles-california", "name": "Los Angeles, California", "region": "California", "country": "US" }
+  ],
+  "venues": [
+    { "key": "target-center", "name": "Target Center", "city": "Minneapolis", "state": "MN", "country": "US", "timeZone": "America/Chicago", "marketKey": "minnesota-twin-cities", "externalId": "target-center" }
+  ],
+  "teams": [
+    { "key": "minnesota-timberwolves", "name": "Minnesota Timberwolves", "abbreviation": "MIN", "marketKey": "minnesota-twin-cities", "homeVenueKey": "target-center", "externalId": "1610612750" },
+    { "key": "toronto-raptors", "name": "Toronto Raptors", "abbreviation": "TOR", "marketKey": "toronto-ontario", "externalId": "1610612761" },
+    { "key": "golden-state-warriors", "name": "Golden State Warriors", "abbreviation": "GSW", "marketKey": "san-francisco-bay-area", "externalId": "1610612744" },
+    { "key": "los-angeles-clippers", "name": "Los Angeles Clippers", "abbreviation": "LAC", "marketKey": "los-angeles-california", "externalId": "1610612746" }
+  ],
+  "events": [
+    { "externalId": "min-2026-10-25-tor", "homeTeamKey": "minnesota-timberwolves", "awayTeamKey": "toronto-raptors", "venueKey": "target-center", "startsAt": "2026-10-25T23:00:00.000Z", "timeTbd": false, "neutralSite": false, "status": "SCHEDULED", "week": 1 },
+    { "externalId": "min-2026-10-28-gsw", "homeTeamKey": "minnesota-timberwolves", "awayTeamKey": "golden-state-warriors", "venueKey": "target-center", "startsAt": "2026-10-29T00:00:00.000Z", "timeTbd": false, "neutralSite": false, "status": "SCHEDULED", "week": 2 },
+    { "externalId": "min-2026-10-30-lac", "homeTeamKey": "minnesota-timberwolves", "awayTeamKey": "los-angeles-clippers", "venueKey": "target-center", "startsAt": "2026-10-31T00:00:00.000Z", "timeTbd": false, "neutralSite": false, "status": "SCHEDULED", "week": 2, "sourceStatus": "Emirates NBA Cup — West Group B" }
+  ]
+}

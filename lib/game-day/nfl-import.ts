@@ -108,6 +108,8 @@ function changed(existing: {
   venueName: string | null;
   neutralSite: boolean;
   marketId: string | null;
+  leagueId: string | null;
+  seasonId: string | null;
 }, next: {
   name: string;
   season: number;
@@ -120,8 +122,10 @@ function changed(existing: {
   venueName: string;
   neutralSite: boolean;
   marketId: string | null;
+  leagueId: string;
+  seasonId: string;
 }) {
-  return existing.name !== next.name || existing.season !== next.season || existing.week !== next.week || existing.startsAt.getTime() !== next.startsAt.getTime() || existing.status !== next.status || existing.homeTeamId !== next.homeTeamId || existing.awayTeamId !== next.awayTeamId || existing.venueId !== next.venueId || existing.venueName !== next.venueName || existing.neutralSite !== next.neutralSite || existing.marketId !== next.marketId;
+  return existing.name !== next.name || existing.season !== next.season || existing.week !== next.week || existing.startsAt.getTime() !== next.startsAt.getTime() || existing.status !== next.status || existing.homeTeamId !== next.homeTeamId || existing.awayTeamId !== next.awayTeamId || existing.venueId !== next.venueId || existing.venueName !== next.venueName || existing.neutralSite !== next.neutralSite || existing.marketId !== next.marketId || existing.leagueId !== next.leagueId || existing.seasonId !== next.seasonId;
 }
 
 async function foundationCounts(prisma: PrismaClient) {
@@ -137,7 +141,10 @@ async function foundationCounts(prisma: PrismaClient) {
   };
 }
 
-async function ensureFoundation(prisma: PrismaClient) {
+async function ensureFoundation(prisma: PrismaClient, seasonYear: number) {
+  const sport = await prisma.sport.upsert({ where: { code: "FOOTBALL" }, create: { key: "football", code: "FOOTBALL", name: "Football" }, update: { key: "football", name: "Football", active: true } });
+  const league = await prisma.league.upsert({ where: { code: "NFL" }, create: { sportId: sport.id, key: "nfl", code: "NFL", name: "National Football League" }, update: { sportId: sport.id, key: "nfl", name: "National Football League", active: true } });
+  const season = await prisma.sportsSeason.upsert({ where: { league_year: { league: "NFL", year: seasonYear } }, create: { league: "NFL", leagueId: league.id, year: seasonYear, label: `NFL ${seasonYear}` }, update: { leagueId: league.id } });
   const marketDefinitions = [...new Map(nflTeams.map((team) => [team.marketKey, { key: team.marketKey, name: team.marketName, region: team.region }])).values()];
   for (const definition of marketDefinitions) {
     const existing = await prisma.market.findUnique({ where: { key: definition.key } });
@@ -170,17 +177,19 @@ async function ensureFoundation(prisma: PrismaClient) {
     const market = markets.get(definition.marketKey)!;
     const venue = venues.get(definition.homeVenueKey)!;
     if (!existing) {
-      await prisma.team.create({ data: { key: definition.key, name: definition.name, marketId: market.id, sport: "Football", league: "NFL", abbreviation: definition.abbreviation, externalSource: NFL_FOUNDATION_SOURCE, externalId: definition.abbreviation, venueName: venue.name, homeVenueId: venue.id } });
+      await prisma.team.create({ data: { key: definition.key, name: definition.name, marketId: market.id, sport: "Football", league: "NFL", leagueId: league.id, abbreviation: definition.abbreviation, externalSource: NFL_FOUNDATION_SOURCE, externalId: definition.abbreviation, venueName: venue.name, homeVenueId: venue.id } });
     } else {
       const fill: Prisma.TeamUpdateInput = {};
       if (!existing.abbreviation) fill.abbreviation = definition.abbreviation;
       if (!existing.externalSource) fill.externalSource = NFL_FOUNDATION_SOURCE;
       if (!existing.externalId) fill.externalId = definition.abbreviation;
       if (!existing.homeVenueId) fill.homeVenue = { connect: { id: venue.id } };
+      if (!existing.leagueId) fill.canonicalLeague = { connect: { id: league.id } };
       if (!existing.venueName) fill.venueName = venue.name;
       if (Object.keys(fill).length) await prisma.team.update({ where: { id: existing.id }, data: fill });
     }
   }
+  return { leagueId: league.id, seasonId: season.id };
 }
 
 export async function importNflSchedule(prisma: PrismaClient, fixture: NflFixture, options: { apply: boolean }): Promise<NflImportSummary> {
@@ -188,7 +197,14 @@ export async function importNflSchedule(prisma: PrismaClient, fixture: NflFixtur
   if (plan.unresolved.length) throw new Error(`NFL fixture has ${plan.unresolved.length} unresolved mappings: ${plan.unresolved[0].reason}`);
 
   const foundation = await foundationCounts(prisma);
-  if (options.apply) await ensureFoundation(prisma);
+  const normalized = options.apply
+    ? await ensureFoundation(prisma, fixture.season)
+    : await (async () => {
+        if (!(prisma as unknown as { league?: unknown }).league || !(prisma as unknown as { sportsSeason?: unknown }).sportsSeason) return { leagueId: "", seasonId: "" };
+        const league = await prisma.league.findUnique({ where: { code: "NFL" }, select: { id: true } });
+        const season = await prisma.sportsSeason.findUnique({ where: { league_year: { league: "NFL", year: fixture.season } }, select: { id: true } });
+        return league && season ? { leagueId: league.id, seasonId: season.id } : { leagueId: "", seasonId: "" };
+      })();
 
   const [teams, venues, existingEvents] = await Promise.all([
     prisma.team.findMany({ where: { key: { in: nflTeams.map((team) => team.key) } }, select: { id: true, key: true, marketId: true } }),
@@ -215,7 +231,7 @@ export async function importNflSchedule(prisma: PrismaClient, fixture: NflFixtur
     if (!homeTeam || !awayTeam || !venue) throw new Error(`Foundation records missing for event ${event.sourceEventId}`);
 
     const marketId = event.neutralSite ? venue.marketId : homeTeam.marketId;
-    const data = { name: event.name, type: "GAME" as const, sport: "Football", league: "NFL", season: event.season, week: event.week, status: event.status, startsAt: event.startsAt, homeTeamId: homeTeam.id, awayTeamId: awayTeam.id, venueId: venue.id, venueName: event.venueName, neutralSite: event.neutralSite, marketId, key: event.key, source: NFL_FOUNDATION_SOURCE, sourceEventId: event.sourceEventId, sourceUpdatedAt: event.sourceUpdatedAt, importedAt, sourceMetadata: event.sourceMetadata };
+    const data = { name: event.name, type: "GAME" as const, sport: "Football", league: "NFL", leagueId: normalized.leagueId, season: event.season, seasonId: normalized.seasonId, week: event.week, status: event.status, startsAt: event.startsAt, homeTeamId: homeTeam.id, awayTeamId: awayTeam.id, venueId: venue.id, venueName: event.venueName, neutralSite: event.neutralSite, marketId, key: event.key, source: NFL_FOUNDATION_SOURCE, sourceEventId: event.sourceEventId, sourceUpdatedAt: event.sourceUpdatedAt, importedAt, sourceMetadata: event.sourceMetadata };
     const existing = existingById.get(event.sourceEventId);
     if (!existing) {
       created += 1;

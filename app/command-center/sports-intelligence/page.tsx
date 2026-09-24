@@ -1,0 +1,34 @@
+import Link from "next/link";
+import { PageHeader } from "@/components/command-center/page-header";
+import { prisma } from "@/lib/prisma";
+
+const views = ["overview", "leagues", "teams", "events", "markets"] as const;
+type View = typeof views[number];
+
+export default async function SportsIntelligencePage({ searchParams }: { searchParams: Promise<{ view?: string; league?: string }> }) {
+  const filters = await searchParams;
+  const view: View = views.includes(filters.view as View) ? filters.view as View : "overview";
+  const leagueCode = filters.league || undefined;
+  const [sports, leagues, teams, events, markets, pendingRecommendations, openQuality] = await Promise.all([
+    prisma.sport.findMany({ include: { _count: { select: { leagues: true } } }, orderBy: { name: "asc" } }),
+    prisma.league.findMany({ include: { sport: true, _count: { select: { teams: true, events: true, seasons: true } } }, orderBy: { code: "asc" } }),
+    prisma.team.findMany({ where: leagueCode ? { canonicalLeague: { code: leagueCode } } : {}, include: { canonicalLeague: true, market: true, homeVenue: true, relevancePolicies: { where: { status: "ACTIVE" }, include: { brand: true } } }, orderBy: { name: "asc" }, take: 150 }),
+    prisma.growthEvent.findMany({ where: { type: "GAME", ...(leagueCode ? { canonicalLeague: { code: leagueCode } } : {}) }, include: { canonicalLeague: true, canonicalSeason: true, homeTeam: true, awayTeam: true, venue: true, market: true, _count: { select: { recommendations: true, opportunities: true } } }, orderBy: { startsAt: "asc" }, take: 200 }),
+    prisma.market.findMany({ include: { _count: { select: { teams: true, venues: true, events: true, campaigns: true, opportunities: true } }, relevancePolicies: { where: { status: "ACTIVE" }, include: { brand: true } } }, orderBy: { name: "asc" } }),
+    prisma.opportunityRecommendation.count({ where: { reviewStatus: "PENDING" } }),
+    prisma.sportsDataQualityIssue.count({ where: { status: "OPEN" } }),
+  ]);
+  const upcoming = events.filter((event) => event.startsAt >= new Date());
+  return <div><PageHeader title="Sports Intelligence" description="Canonical schedules, markets, venues, and SNG relevance—separate from deep factual statistics and scoring operations." />
+    <nav className="mt-6 flex flex-wrap gap-2">{views.map((item) => <Link key={item} href={`/command-center/sports-intelligence?view=${item}`} className={`rounded-full border px-3 py-1.5 text-xs ${item === view ? "border-[#b8d4c8]/40 bg-[#b8d4c8]/10 text-white" : "border-white/10 text-[#8f9391]"}`}>{item[0].toUpperCase() + item.slice(1)}</Link>)}</nav>
+    {view === "overview" && <><section className="mt-7 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{[["Sports", sports.length], ["Leagues", leagues.length], ["Upcoming events", upcoming.length], ["Pending recommendations", pendingRecommendations]].map(([label, value]) => <article key={label} className="rounded-2xl border border-white/8 bg-[#101214] p-5"><p className="text-xs text-[#8f9391]">{label}</p><p className="mt-3 font-display text-3xl text-white">{value}</p></article>)}</section><section className="mt-6 rounded-2xl border border-white/8 bg-[#101214] p-6"><div className="flex justify-between"><div><h2 className="font-display text-xl text-white">Operating posture</h2><p className="mt-1 text-sm text-[#8f9391]">{openQuality} open Sports Data Quality issues · intelligence evaluators remain separately versioned.</p></div><Link href="/command-center/live-desk" className="text-xs text-[#b8d4c8]">Review opportunities →</Link></div><div className="mt-5 grid gap-3 md:grid-cols-2">{upcoming.slice(0, 6).map((event) => <EventCard key={event.id} event={event} />)}</div></section></>}
+    {view === "leagues" && <section className="mt-7 grid gap-4 md:grid-cols-2">{leagues.map((league) => <Link key={league.id} href={`/command-center/sports-intelligence?view=events&league=${league.code}`} className="rounded-2xl border border-white/8 bg-[#101214] p-5"><p className="text-[10px] uppercase tracking-wider text-[#b8d4c8]">{league.sport.name}</p><h2 className="mt-2 font-display text-xl text-white">{league.name}</h2><p className="mt-3 text-xs text-[#8f9391]">{league._count.teams} teams · {league._count.events} events · {league._count.seasons} seasons{league.subdivision ? ` · ${league.subdivision}` : ""}</p></Link>)}</section>}
+    {view === "teams" && <section className="mt-7 grid gap-4 md:grid-cols-2 xl:grid-cols-3">{teams.map((team) => <Link href={`/command-center/sports-intelligence/teams/${team.id}`} key={team.id} className="rounded-2xl border border-white/8 bg-[#101214] p-5"><p className="text-[10px] uppercase tracking-wider text-[#b8d4c8]">{team.canonicalLeague?.code ?? team.league}</p><h2 className="mt-2 text-base font-medium text-white">{team.name}</h2><p className="mt-2 text-xs text-[#8f9391]">{team.market.name} · {team.homeVenue?.name ?? team.venueName ?? "Venue not assigned"}</p><p className="mt-3 text-xs text-[#777b78]">{team.relevancePolicies.map((policy) => policy.brand.shortName ?? policy.brand.name).join(" · ") || "No active SNG policy"}</p></Link>)}</section>}
+    {view === "events" && <section className="mt-7 space-y-3">{events.map((event) => <EventCard key={event.id} event={event} />)}</section>}
+    {view === "markets" && <section className="mt-7 grid gap-4 md:grid-cols-2">{markets.map((market) => <Link href={`/command-center/sports-intelligence/markets/${market.id}`} key={market.id} className="rounded-2xl border border-white/8 bg-[#101214] p-5"><h2 className="font-display text-xl text-white">{market.name}</h2><p className="mt-3 text-xs text-[#8f9391]">{market._count.teams} teams · {market._count.venues} venues · {market._count.events} events</p><p className="mt-2 text-xs text-[#777b78]">{market._count.campaigns} campaigns · {market._count.opportunities} opportunities</p></Link>)}</section>}
+  </div>;
+}
+
+function EventCard({ event }: { event: { id: string; name: string; startsAt: Date; status: string; canonicalLeague: { code: string } | null; league: string | null; venue: { name: string } | null; venueName: string | null; market: { name: string } | null; _count: { recommendations: number; opportunities: number } } }) {
+  return <Link href={`/command-center/sports-intelligence/events/${event.id}`} className="block rounded-2xl border border-white/8 bg-[#101214] p-5"><div className="flex justify-between gap-4"><div><p className="text-[10px] uppercase tracking-wider text-[#b8d4c8]">{event.canonicalLeague?.code ?? event.league} · {event.status.replaceAll("_", " ")}</p><h3 className="mt-2 text-sm font-medium text-white">{event.name}</h3><p className="mt-2 text-xs text-[#8f9391]">{event.startsAt.toLocaleString()} · {event.venue?.name ?? event.venueName}{event.market ? ` · ${event.market.name}` : ""}</p></div><span className="text-xs text-[#777b78]">{event._count.recommendations} recs · {event._count.opportunities} opps</span></div></Link>;
+}
