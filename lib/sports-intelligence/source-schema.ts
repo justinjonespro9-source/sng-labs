@@ -17,7 +17,7 @@ export const sportsSchedulePackageSchema = z.object({
   season: z.object({ year: z.number().int().min(2000), label: z.string().min(2) }),
   markets: z.array(z.object({ key, name: z.string().min(2), region: z.string().optional(), country: z.string().default("US") })),
   venues: z.array(z.object({ key, name: z.string().min(2), city: z.string().min(2), state: z.string().optional(), country: z.string().default("US"), timeZone: z.string().min(3), marketKey: key.optional(), externalId: z.string().min(1) })),
-  teams: z.array(z.object({ key, name: z.string().min(2), abbreviation: z.string().min(2), marketKey: key, homeVenueKey: key.optional(), externalId: z.string().min(1) })),
+  teams: z.array(z.object({ key, name: z.string().min(2), abbreviation: z.string().min(2), subdivision: z.string().min(1).optional(), marketKey: key, homeVenueKey: key.optional(), externalId: z.string().min(1) })),
   events: z.array(z.object({
     externalId: z.string().min(1),
     homeTeamKey: key,

@@ -25,14 +25,14 @@
     { "key": "huntington-bank-stadium", "name": "Huntington Bank Stadium", "city": "Minneapolis", "state": "MN", "country": "US", "timeZone": "America/Chicago", "marketKey": "minnesota-twin-cities", "externalId": "huntington-bank-stadium" }
   ],
   "teams": [
-    { "key": "minnesota-golden-gophers-football", "name": "Minnesota Golden Gophers Football", "abbreviation": "MINN", "marketKey": "minnesota-twin-cities", "homeVenueKey": "huntington-bank-stadium", "externalId": "minnesota" },
-    { "key": "eastern-illinois-panthers-football", "name": "Eastern Illinois Panthers Football", "abbreviation": "EIU", "marketKey": "charleston-illinois", "externalId": "eastern-illinois" },
-    { "key": "mississippi-state-bulldogs-football", "name": "Mississippi State Bulldogs Football", "abbreviation": "MSST", "marketKey": "starkville-mississippi", "externalId": "mississippi-state" },
-    { "key": "akron-zips-football", "name": "Akron Zips Football", "abbreviation": "AKR", "marketKey": "akron-ohio", "externalId": "akron" },
-    { "key": "michigan-wolverines-football", "name": "Michigan Wolverines Football", "abbreviation": "MICH", "marketKey": "ann-arbor-michigan", "externalId": "michigan" },
-    { "key": "iowa-hawkeyes-football", "name": "Iowa Hawkeyes Football", "abbreviation": "IOWA", "marketKey": "iowa-city-iowa", "externalId": "iowa" },
-    { "key": "ucla-bruins-football", "name": "UCLA Bruins Football", "abbreviation": "UCLA", "marketKey": "los-angeles-california", "externalId": "ucla" },
-    { "key": "northwestern-wildcats-football", "name": "Northwestern Wildcats Football", "abbreviation": "NW", "marketKey": "evanston-illinois", "externalId": "northwestern" }
+    { "key": "minnesota-golden-gophers-football", "name": "Minnesota Golden Gophers Football", "abbreviation": "MINN", "subdivision": "FBS", "marketKey": "minnesota-twin-cities", "homeVenueKey": "huntington-bank-stadium", "externalId": "minnesota" },
+    { "key": "eastern-illinois-panthers-football", "name": "Eastern Illinois Panthers Football", "abbreviation": "EIU", "subdivision": "FCS", "marketKey": "charleston-illinois", "externalId": "eastern-illinois" },
+    { "key": "mississippi-state-bulldogs-football", "name": "Mississippi State Bulldogs Football", "abbreviation": "MSST", "subdivision": "FBS", "marketKey": "starkville-mississippi", "externalId": "mississippi-state" },
+    { "key": "akron-zips-football", "name": "Akron Zips Football", "abbreviation": "AKR", "subdivision": "FBS", "marketKey": "akron-ohio", "externalId": "akron" },
+    { "key": "michigan-wolverines-football", "name": "Michigan Wolverines Football", "abbreviation": "MICH", "subdivision": "FBS", "marketKey": "ann-arbor-michigan", "externalId": "michigan" },
+    { "key": "iowa-hawkeyes-football", "name": "Iowa Hawkeyes Football", "abbreviation": "IOWA", "subdivision": "FBS", "marketKey": "iowa-city-iowa", "externalId": "iowa" },
+    { "key": "ucla-bruins-football", "name": "UCLA Bruins Football", "abbreviation": "UCLA", "subdivision": "FBS", "marketKey": "los-angeles-california", "externalId": "ucla" },
+    { "key": "northwestern-wildcats-football", "name": "Northwestern Wildcats Football", "abbreviation": "NW", "subdivision": "FBS", "marketKey": "evanston-illinois", "externalId": "northwestern" }
   ],
   "events": [
     { "externalId": "minn-2026-eiu", "homeTeamKey": "minnesota-golden-gophers-football", "awayTeamKey": "eastern-illinois-panthers-football", "venueKey": "huntington-bank-stadium", "startsAt": "2026-09-04T00:00:00.000Z", "timeTbd": false, "neutralSite": false, "status": "FINAL", "week": 1, "sourceStatus": "W 59-7" },

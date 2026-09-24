@@ -812,6 +812,7 @@ model Team {
   sport                String
   league               String
   leagueId             String?
+  subdivision          String?
   abbreviation         String?
   externalSource       String?
   externalId           String?

@@ -38,4 +38,11 @@ describe("Sports Intelligence schedule packages", () => {
     events[4] = { ...events[4], timeTbd: false };
     expect(() => validateSchedulePackage(input)).toThrow("timeTbd/status mismatch");
   });
+
+  it("preserves NCAAF program subdivision without changing the canonical league", () => {
+    const parsed = validateSchedulePackage(fixture("2026-minnesota-ncaaf-home-schedule.json"));
+    expect(parsed.league.code).toBe("NCAAF");
+    expect(parsed.teams.find((team) => team.key === "minnesota-golden-gophers-football")?.subdivision).toBe("FBS");
+    expect(parsed.teams.find((team) => team.key === "eastern-illinois-panthers-football")?.subdivision).toBe("FCS");
+  });
 });
