@@ -23,11 +23,104 @@ enum SocialPlatform {
   X
   INSTAGRAM
   FACEBOOK
+  DISCORD
   LINKEDIN
   TIKTOK
   YOUTUBE
   THREADS
   OTHER
+}
+
+enum SocialAccountType {
+  UNKNOWN
+  PROFILE
+  PAGE
+  PROFESSIONAL_ACCOUNT
+  GUILD
+  CHANNEL
+  WEBHOOK_DESTINATION
+  OTHER
+}
+
+enum SocialAccountLifecycleStatus {
+  KNOWN
+  ACTIVE
+  INACTIVE
+  DISABLED
+}
+
+enum SocialPlatformApplicationEnvironment {
+  PREVIEW
+  PRODUCTION
+}
+
+enum SocialPlatformApplicationStatus {
+  DISABLED
+  CONFIGURED
+  RETIRED
+}
+
+enum SocialAuthorizationStatus {
+  NOT_CONNECTED
+  PENDING
+  CONNECTED
+  EXPIRED
+  REAUTHORIZATION_REQUIRED
+  REVOKED
+  ERROR
+  DISABLED
+}
+
+enum SocialAuthorizationAccountStatus {
+  DISCOVERED
+  VERIFIED
+  INACCESSIBLE
+  DISABLED
+}
+
+enum SocialCapability {
+  READ_PROFILE
+  PUBLISH_TEXT
+  PUBLISH_IMAGE
+  PUBLISH_VIDEO
+  PUBLISH_MULTI_POST
+  READ_PUBLICATION
+  READ_ANALYTICS
+  READ_REPLIES
+  MANAGE_COMMUNITY
+  RECEIVE_WEBHOOK_EVENTS
+}
+
+enum SocialCapabilityState {
+  SUPPORTED
+  UNSUPPORTED
+  UNVERIFIED
+  BLOCKED
+}
+
+enum SocialConnectionHealthState {
+  HEALTHY
+  WATCH
+  AT_RISK
+  DISCONNECTED
+  REAUTHORIZATION_REQUIRED
+  PERMISSION_MISSING
+  API_ERROR
+  DISABLED
+  UNKNOWN
+}
+
+enum SocialConnectionHealthSignal {
+  AUTHORIZATION_VALID
+  AUTHORIZATION_EXPIRED
+  REFRESH_SUCCEEDED
+  REFRESH_FAILED
+  PERMISSION_LOST
+  ACCOUNT_INACCESSIBLE
+  API_REQUEST_FAILED
+  WEBHOOK_FAILED
+  ACCOUNT_DISABLED
+  MANUAL_REVIEW
 }
 
 enum ConnectionStatus {
@@ -400,6 +493,7 @@ model User {
   sportsIngestionRuns     SportsIngestionRun[]
   sportsStatRevisions     SportsStatRevision[]
   sportsScoringRuns       SportsScoringRun[]
+  socialAuthorizations    SocialAuthorization[]
   createdAt               DateTime                    @default(now())
   updatedAt               DateTime                    @updatedAt
 }
@@ -538,27 +632,171 @@ model LeagueExternalIdentity {
 }
 
 model SocialAccount {
-  id               String                  @id @default(cuid())
-  brandId          String
-  platform         SocialPlatform
-  handle           String?
-  profileUrl       String?
-  connectionStatus ConnectionStatus        @default(NOT_CONNECTED)
-  publishingMode   PublishingMode          @default(MANUAL)
-  cadenceRules     Json?
-  platformRules    Json?
-  autopilotAllowed Boolean                 @default(false)
-  currentHealth    HealthState             @default(HEALTHY)
-  brand            Brand                   @relation(fields: [brandId], references: [id], onDelete: Cascade)
-  drafts           ContentDraft[]
-  publications     Publication[]
-  metricSnapshots  MetricSnapshot[]
-  healthSnapshots  AccountHealthSnapshot[]
-  createdAt        DateTime                @default(now())
-  updatedAt        DateTime                @updatedAt
+  id                             String                              @id @default(cuid())
+  brandId                        String
+  platform                       SocialPlatform
+  externalAccountId              String?
+  accountType                    SocialAccountType                   @default(UNKNOWN)
+  lifecycleStatus                SocialAccountLifecycleStatus        @default(KNOWN)
+  handle                         String?
+  displayName                    String?
+  profileUrl                     String?
+  ownershipNotes                 String?                             @db.Text
+  metadataVerifiedAt             DateTime?
+  lastSuccessfulApiInteractionAt DateTime?
+  publishingEnabled              Boolean                             @default(false)
+  analyticsEnabled               Boolean                             @default(false)
+  communityEnabled               Boolean                             @default(false)
+  isDefaultForPlatform           Boolean                             @default(false)
+  connectionStatus               ConnectionStatus                    @default(NOT_CONNECTED)
+  publishingMode                 PublishingMode                      @default(MANUAL)
+  cadenceRules                   Json?
+  platformRules                  Json?
+  autopilotAllowed               Boolean                             @default(false)
+  currentHealth                  HealthState                         @default(HEALTHY)
+  brand                          Brand                               @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  authorizationLinks             SocialAuthorizationAccount[]
+  capabilitySnapshots            SocialCapabilitySnapshot[]
+  connectionHealthObservations   SocialConnectionHealthObservation[]
+  drafts                         ContentDraft[]
+  publications                   Publication[]
+  metricSnapshots                MetricSnapshot[]
+  healthSnapshots                AccountHealthSnapshot[]
+  createdAt                      DateTime                            @default(now())
+  updatedAt                      DateTime                            @updatedAt
 
-  @@unique([brandId, platform])
+  @@unique([platform, externalAccountId])
+  @@index([brandId, platform, lifecycleStatus])
   @@index([platform, connectionStatus])
+}
+
+model SocialPlatformApplication {
+  id                    String                               @id @default(cuid())
+  key                   String                               @unique
+  platform              SocialPlatform
+  environment           SocialPlatformApplicationEnvironment
+  status                SocialPlatformApplicationStatus      @default(DISABLED)
+  providerApplicationId String?
+  clientCredentialRef   String?
+  signingSecretRef      String?
+  callbackPath          String?
+  featureFlagKey        String?
+  metadata              Json?
+  authorizations        SocialAuthorization[]
+  createdAt             DateTime                             @default(now())
+  updatedAt             DateTime                             @updatedAt
+
+  @@unique([platform, environment, providerApplicationId])
+  @@index([platform, environment, status])
+}
+
+model SocialAuthorization {
+  id                      String                       @id @default(cuid())
+  platformApplicationId   String
+  authorizedById          String?
+  providerAuthorizationId String?
+  providerPrincipalId     String?
+  status                  SocialAuthorizationStatus    @default(NOT_CONNECTED)
+  grantedScopes           String[]                     @default([])
+  requiredScopes          String[]                     @default([])
+  accessCredentialRef     String?
+  refreshCredentialRef    String?
+  expiresAt               DateTime?
+  refreshCapable          Boolean                      @default(false)
+  lastRefreshedAt         DateTime?
+  lastValidatedAt         DateTime?
+  revokedAt               DateTime?
+  reauthorizationReason   String?
+  lastErrorCode           String?
+  lastErrorMessage        String?                      @db.Text
+  lastErrorAt             DateTime?
+  platformApplication     SocialPlatformApplication    @relation(fields: [platformApplicationId], references: [id], onDelete: Restrict)
+  authorizedBy            User?                        @relation(fields: [authorizedById], references: [id], onDelete: SetNull)
+  accounts                SocialAuthorizationAccount[]
+  createdAt               DateTime                     @default(now())
+  updatedAt               DateTime                     @updatedAt
+
+  @@unique([platformApplicationId, providerAuthorizationId])
+  @@index([platformApplicationId, status, expiresAt])
+  @@index([authorizedById, createdAt])
+}
+
+model SocialAuthorizationAccount {
+  id                       String                              @id @default(cuid())
+  authorizationId          String
+  socialAccountId          String
+  status                   SocialAuthorizationAccountStatus    @default(DISCOVERED)
+  providerRelationshipType String?
+  providerRoles            String[]                            @default([])
+  discoveredAt             DateTime                            @default(now())
+  verifiedAt               DateTime?
+  lastAccessibleAt         DateTime?
+  authorization            SocialAuthorization                 @relation(fields: [authorizationId], references: [id], onDelete: Cascade)
+  socialAccount            SocialAccount                       @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
+  capabilitySnapshots      SocialCapabilitySnapshot[]
+  healthObservations       SocialConnectionHealthObservation[]
+  createdAt                DateTime                            @default(now())
+  updatedAt                DateTime                            @updatedAt
+
+  @@unique([authorizationId, socialAccountId])
+  @@index([socialAccountId, status])
+}
+
+model SocialCapabilitySnapshot {
+  id                     String                     @id @default(cuid())
+  authorizationAccountId String
+  socialAccountId        String
+  adapterVersion         String
+  fingerprint            String                     @unique
+  verificationMethod     String
+  verifiedAt             DateTime                   @default(now())
+  validUntil             DateTime
+  evidence               Json?
+  authorizationAccount   SocialAuthorizationAccount @relation(fields: [authorizationAccountId], references: [id], onDelete: Cascade)
+  socialAccount          SocialAccount              @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
+  results                SocialCapabilityResult[]
+  createdAt              DateTime                   @default(now())
+
+  @@index([socialAccountId, validUntil])
+  @@index([authorizationAccountId, verifiedAt])
+}
+
+model SocialCapabilityResult {
+  id             String                   @id @default(cuid())
+  snapshotId     String
+  capability     SocialCapability
+  state          SocialCapabilityState
+  requiredScopes String[]                 @default([])
+  presentScopes  String[]                 @default([])
+  reasonCode     String?
+  evidence       Json?
+  snapshot       SocialCapabilitySnapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+  createdAt      DateTime                 @default(now())
+
+  @@unique([snapshotId, capability])
+  @@index([capability, state])
+}
+
+model SocialConnectionHealthObservation {
+  id                     String                       @id @default(cuid())
+  socialAccountId        String
+  authorizationAccountId String?
+  state                  SocialConnectionHealthState
+  signal                 SocialConnectionHealthSignal
+  code                   String
+  summary                String
+  operatorActionRequired Boolean                      @default(false)
+  dedupeKey              String
+  observedAt             DateTime                     @default(now())
+  resolvedAt             DateTime?
+  metadata               Json?
+  socialAccount          SocialAccount                @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
+  authorizationAccount   SocialAuthorizationAccount?  @relation(fields: [authorizationAccountId], references: [id], onDelete: SetNull)
+  createdAt              DateTime                     @default(now())
+
+  @@index([socialAccountId, observedAt])
+  @@index([operatorActionRequired, resolvedAt, observedAt])
+  @@index([dedupeKey, resolvedAt])
 }
 
 model SourceEvent {
