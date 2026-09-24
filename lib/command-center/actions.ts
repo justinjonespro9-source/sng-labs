@@ -8,6 +8,7 @@ import { assertContentTransition, canDeleteContent, canDeleteOpportunity, hasSub
 import { mergeActivationContext } from "@/lib/command-center/campaign-workflow";
 import { parseContentModes, parseLines } from "@/lib/command-center/brand-brain";
 import { prisma } from "@/lib/prisma";
+import { writeSocialAuditEvent } from "@/lib/social-accounts/audit";
 
 const text = z.string().trim().min(1).max(500);
 const optionalText = z.string().trim().max(5000).optional().transform((value) => value || null);
@@ -437,12 +438,15 @@ export async function updateActivation(activationId: string, formData: FormData)
   redirect(`/command-center/campaigns/${activation.campaignId}/activations/${activationId}`);
 }
 
-export async function upsertSocialAccount(brandId: string, formData: FormData) {
+export async function createKnownSocialAccount(brandId: string, formData: FormData) {
   const user = await requireEditor();
-  const platform = z.enum(["X", "INSTAGRAM", "FACEBOOK", "LINKEDIN", "TIKTOK", "YOUTUBE", "THREADS", "OTHER"]).parse(formData.get("platform"));
+  const platform = z.enum(["X", "INSTAGRAM", "FACEBOOK", "DISCORD", "LINKEDIN", "TIKTOK", "YOUTUBE", "THREADS", "OTHER"]).parse(formData.get("platform"));
+  const accountType = z.enum(["UNKNOWN", "PROFILE", "PAGE", "PROFESSIONAL_ACCOUNT", "GUILD", "CHANNEL", "WEBHOOK_DESTINATION", "OTHER"]).parse(formData.get("accountType") || "UNKNOWN");
   const handle = String(formData.get("handle") || "").trim() || null;
+  const displayName = String(formData.get("displayName") || "").trim() || null;
   const profileUrl = String(formData.get("profileUrl") || "").trim() || null;
-  await prisma.socialAccount.upsert({ where: { brandId_platform: { brandId, platform } }, update: { handle, profileUrl }, create: { brandId, platform, handle, profileUrl, publishingMode: "MANUAL", autopilotAllowed: false } });
-  await audit(user.id, "social_account.upsert", "Brand", brandId);
+  const account = await prisma.socialAccount.create({ data: { brandId, platform, accountType, handle, displayName, profileUrl, lifecycleStatus: "KNOWN", connectionStatus: "NOT_CONNECTED", publishingMode: "MANUAL", publishingEnabled: false, analyticsEnabled: false, communityEnabled: false, autopilotAllowed: false } });
+  await writeSocialAuditEvent(prisma, { actorId: user.id, action: "social_account.inventory.create", entityType: "SocialAccount", entityId: account.id, metadata: { brandId, platform, accountType } });
   revalidatePath(`/command-center/brands/${brandId}`);
+  revalidatePath("/command-center/settings/integrations");
 }
