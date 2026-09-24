@@ -2,9 +2,9 @@ import type { Prisma, PrismaClient } from "@prisma/client";
 import { evaluateEventRelevance, evaluateSlateRelevance, GAME_DAY_RULE_VERSION, type RecommendationCandidate, type RelevanceEvent } from "./relevance";
 
 const eventInclude = {
-  market: { select: { id: true, name: true } },
-  venue: { select: { id: true, key: true, name: true, stadiumSlopVenueKey: true } },
-  homeTeam: { select: { id: true, name: true, brands: { select: { key: true } } } },
+  market: { select: { id: true, name: true, relevancePolicies: { where: { status: "ACTIVE" }, select: { brand: { select: { key: true } } } } } },
+  venue: { select: { id: true, key: true, name: true, stadiumSlopVenueKey: true, relevancePolicies: { where: { status: "ACTIVE" }, select: { brand: { select: { key: true } } } } } },
+  homeTeam: { select: { id: true, name: true, brands: { select: { key: true } }, relevancePolicies: { where: { status: "ACTIVE" }, select: { brand: { select: { key: true } } } } } },
   awayTeam: { select: { id: true, name: true } },
 } as const;
 

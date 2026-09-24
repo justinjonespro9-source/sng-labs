@@ -7,7 +7,7 @@ import { z } from "zod";
 import { requireCommandCenterUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { recommendationAcceptanceDecision } from "./acceptance";
-import { evaluateAndPersistNflWeek } from "./recommendations";
+import { evaluateSportsWindow } from "@/lib/sports-intelligence/evaluation";
 
 async function requireEditor() {
   const user = await requireCommandCenterUser();
@@ -22,7 +22,7 @@ function priorityScore(priority: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL") {
 export async function evaluateNflWeekAction(formData: FormData) {
   const user = await requireEditor();
   const input = z.object({ season: z.coerce.number().int().min(2020).max(2100), week: z.coerce.number().int().min(1).max(22) }).parse({ season: formData.get("season"), week: formData.get("week") });
-  const result = await evaluateAndPersistNflWeek(prisma, input);
+  const result = await evaluateSportsWindow(prisma, { leagueCode: "NFL", seasonYear: input.season, week: input.week });
   await prisma.auditEvent.create({ data: { actorId: user.id, action: "game_day.evaluate", entityType: "NFLWeek", entityId: `${input.season}-${input.week}`, metadata: result } });
   revalidatePath("/command-center/live-desk");
   redirect(`/command-center/live-desk?league=NFL&season=${input.season}&week=${input.week}`);

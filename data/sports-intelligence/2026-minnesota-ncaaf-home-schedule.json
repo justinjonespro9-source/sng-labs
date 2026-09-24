@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "source": {
+    "provider": "gophersports-official",
+    "label": "University of Minnesota Athletics — 2026 Football Schedule (operator reviewed)",
+    "reference": "https://gophersports.com/sports/football/schedule/text",
+    "publishedAt": "2026-05-27T12:00:00.000Z",
+    "acquiredAt": "2026-09-24T12:00:00.000Z",
+    "review": { "reviewer": "SNG operator", "reviewedAt": "2026-09-24T12:00:00.000Z" }
+  },
+  "sport": { "key": "football", "code": "FOOTBALL", "name": "Football" },
+  "league": { "key": "ncaaf", "code": "NCAAF", "name": "NCAA Football", "subdivision": "FBS" },
+  "season": { "year": 2026, "label": "2026 NCAA Football" },
+  "markets": [
+    { "key": "minnesota-twin-cities", "name": "Minnesota / Twin Cities", "region": "Minnesota", "country": "US" },
+    { "key": "charleston-illinois", "name": "Charleston, Illinois", "region": "Illinois", "country": "US" },
+    { "key": "starkville-mississippi", "name": "Starkville, Mississippi", "region": "Mississippi", "country": "US" },
+    { "key": "akron-ohio", "name": "Akron, Ohio", "region": "Ohio", "country": "US" },
+    { "key": "ann-arbor-michigan", "name": "Ann Arbor, Michigan", "region": "Michigan", "country": "US" },
+    { "key": "iowa-city-iowa", "name": "Iowa City, Iowa", "region": "Iowa", "country": "US" },
+    { "key": "los-angeles-california", "name": "Los Angeles, California", "region": "California", "country": "US" },
+    { "key": "evanston-illinois", "name": "Evanston, Illinois", "region": "Illinois", "country": "US" }
+  ],
+  "venues": [
+    { "key": "huntington-bank-stadium", "name": "Huntington Bank Stadium", "city": "Minneapolis", "state": "MN", "country": "US", "timeZone": "America/Chicago", "marketKey": "minnesota-twin-cities", "externalId": "huntington-bank-stadium" }
+  ],
+  "teams": [
+    { "key": "minnesota-golden-gophers-football", "name": "Minnesota Golden Gophers Football", "abbreviation": "MINN", "subdivision": "FBS", "marketKey": "minnesota-twin-cities", "homeVenueKey": "huntington-bank-stadium", "externalId": "minnesota" },
+    { "key": "eastern-illinois-panthers-football", "name": "Eastern Illinois Panthers Football", "abbreviation": "EIU", "subdivision": "FCS", "marketKey": "charleston-illinois", "externalId": "eastern-illinois" },
+    { "key": "mississippi-state-bulldogs-football", "name": "Mississippi State Bulldogs Football", "abbreviation": "MSST", "subdivision": "FBS", "marketKey": "starkville-mississippi", "externalId": "mississippi-state" },
+    { "key": "akron-zips-football", "name": "Akron Zips Football", "abbreviation": "AKR", "subdivision": "FBS", "marketKey": "akron-ohio", "externalId": "akron" },
+    { "key": "michigan-wolverines-football", "name": "Michigan Wolverines Football", "abbreviation": "MICH", "subdivision": "FBS", "marketKey": "ann-arbor-michigan", "externalId": "michigan" },
+    { "key": "iowa-hawkeyes-football", "name": "Iowa Hawkeyes Football", "abbreviation": "IOWA", "subdivision": "FBS", "marketKey": "iowa-city-iowa", "externalId": "iowa" },
+    { "key": "ucla-bruins-football", "name": "UCLA Bruins Football", "abbreviation": "UCLA", "subdivision": "FBS", "marketKey": "los-angeles-california", "externalId": "ucla" },
+    { "key": "northwestern-wildcats-football", "name": "Northwestern Wildcats Football", "abbreviation": "NW", "subdivision": "FBS", "marketKey": "evanston-illinois", "externalId": "northwestern" }
+  ],
+  "events": [
+    { "externalId": "minn-2026-eiu", "homeTeamKey": "minnesota-golden-gophers-football", "awayTeamKey": "eastern-illinois-panthers-football", "venueKey": "huntington-bank-stadium", "startsAt": "2026-09-04T00:00:00.000Z", "timeTbd": false, "neutralSite": false, "status": "FINAL", "week": 1, "sourceStatus": "W 59-7" },
+    { "externalId": "minn-2026-msst", "homeTeamKey": "minnesota-golden-gophers-football", "awayTeamKey": "mississippi-state-bulldogs-football", "venueKey": "huntington-bank-stadium", "startsAt": "2026-09-12T19:30:00.000Z", "timeTbd": false, "neutralSite": false, "status": "FINAL", "week": 2, "sourceStatus": "L 13-38" },
+    { "externalId": "minn-2026-akron", "homeTeamKey": "minnesota-golden-gophers-football", "awayTeamKey": "akron-zips-football", "venueKey": "huntington-bank-stadium", "startsAt": "2026-09-19T16:00:00.000Z", "timeTbd": false, "neutralSite": false, "status": "FINAL", "week": 3, "sourceStatus": "W 41-7" },
+    { "externalId": "minn-2026-mich", "homeTeamKey": "minnesota-golden-gophers-football", "awayTeamKey": "michigan-wolverines-football", "venueKey": "huntington-bank-stadium", "startsAt": "2026-10-03T16:00:00.000Z", "timeTbd": false, "neutralSite": false, "status": "SCHEDULED", "week": 5 },
+    { "externalId": "minn-2026-iowa", "homeTeamKey": "minnesota-golden-gophers-football", "awayTeamKey": "iowa-hawkeyes-football", "venueKey": "huntington-bank-stadium", "startsAt": "2026-10-24T17:00:00.000Z", "timeTbd": true, "neutralSite": false, "status": "TIME_TBD", "week": 8, "sourceStatus": "TBA" },
+    { "externalId": "minn-2026-ucla", "homeTeamKey": "minnesota-golden-gophers-football", "awayTeamKey": "ucla-bruins-football", "venueKey": "huntington-bank-stadium", "startsAt": "2026-11-07T18:00:00.000Z", "timeTbd": true, "neutralSite": false, "status": "TIME_TBD", "week": 10, "sourceStatus": "TBA" },
+    { "externalId": "minn-2026-nw", "homeTeamKey": "minnesota-golden-gophers-football", "awayTeamKey": "northwestern-wildcats-football", "venueKey": "huntington-bank-stadium", "startsAt": "2026-11-21T18:00:00.000Z", "timeTbd": true, "neutralSite": false, "status": "TIME_TBD", "week": 12, "sourceStatus": "TBA" }
+  ]
+}
