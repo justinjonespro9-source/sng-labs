@@ -3,6 +3,7 @@ import "server-only";
 import { Prisma } from "@prisma/client";
 import { redirect, unstable_rethrow } from "next/navigation";
 import { ZodError } from "zod";
+import { submittedValues, type FormActionState } from "./form-state";
 
 export function withSearchParam(path: string, key: string, value: string) {
   const [base, query = ""] = path.split("?");
@@ -36,6 +37,18 @@ export async function runFormAction(returnTo: string, work: () => Promise<{ redi
   } catch (error) {
     unstable_rethrow(error);
     destination = withSearchParam(returnTo, "error", userFacingError(error));
+  }
+  redirect(destination);
+}
+
+/** For forms using useActionState: redirects on success; on failure returns the error with the submitted values so nothing the operator typed is lost. */
+export async function runFormStateAction(previous: FormActionState, formData: FormData, work: () => Promise<{ redirectTo: string }>): Promise<FormActionState> {
+  let destination: string;
+  try {
+    destination = (await work()).redirectTo;
+  } catch (error) {
+    unstable_rethrow(error);
+    return { error: userFacingError(error), values: submittedValues(formData), attempt: previous.attempt + 1 };
   }
   redirect(destination);
 }

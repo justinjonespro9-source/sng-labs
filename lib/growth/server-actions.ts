@@ -9,6 +9,7 @@ import { writeSocialAuditEvent } from "@/lib/social-accounts/audit";
 import { completedAtFor, validateGrowthAction, type GrowthActionStatus } from "./actions-rules";
 import { growthStages, type BriefContent } from "./briefs";
 import { runFormAction } from "./form-action";
+import { safeReturnTo } from "./form-state";
 import { inclusiveEndToExclusive, metricAggregations, metricUnits, funnelStages, validateCampaignTarget, validateMetricDefinition } from "./measurements";
 import { recordMeasurementTx } from "./measurement-store";
 import { assertCanAllocatePortfolio, assertCanEditGrowth } from "./permissions";
@@ -130,8 +131,8 @@ export async function archiveGrowthBriefAction(briefId: string) {
 }
 
 export async function setPortfolioPriorityAction(brandId: string, formData: FormData) {
-  const returnTo = String(formData.get("returnTo") || "/command-center/growth");
-  await runFormAction(returnTo.startsWith("/command-center") ? returnTo : "/command-center/growth", async () => {
+  const returnTo = safeReturnTo(formData, "/command-center/growth");
+  await runFormAction(returnTo, async () => {
     const user = await requireCommandCenterUser();
     assertCanAllocatePortfolio(user.role);
     const effectiveAt = parseCentralInput(formData.get("effectiveAt")) ?? new Date();
@@ -165,7 +166,7 @@ function definitionDraft(formData: FormData) {
 }
 
 export async function createMetricDefinitionAction(formData: FormData) {
-  await runFormAction("/command-center/scorecards", async () => {
+  await runFormAction(safeReturnTo(formData, "/command-center/scorecards"), async () => {
     const user = await requireGrowthEditor();
     const brandId = required(formData, "brandId", "Brand");
     const draft = definitionDraft(formData);
@@ -180,7 +181,7 @@ export async function createMetricDefinitionAction(formData: FormData) {
 }
 
 export async function createMetricDefinitionVersionAction(definitionId: string, formData: FormData) {
-  await runFormAction("/command-center/scorecards", async () => {
+  await runFormAction(safeReturnTo(formData, "/command-center/scorecards"), async () => {
     const user = await requireGrowthEditor();
     const draft = definitionDraft(formData);
     const funnelStage = z.enum(funnelStages).parse(formData.get("funnelStage"));
@@ -199,7 +200,7 @@ export async function createMetricDefinitionVersionAction(definitionId: string, 
 }
 
 export async function setMetricDefinitionStatusAction(definitionId: string, formData: FormData) {
-  await runFormAction("/command-center/scorecards", async () => {
+  await runFormAction(safeReturnTo(formData, "/command-center/scorecards"), async () => {
     const user = await requireGrowthEditor();
     const status = z.enum(["ACTIVE", "RETIRED"]).parse(formData.get("status"));
     await prisma.$transaction(async (tx) => {
@@ -217,8 +218,8 @@ export async function setMetricDefinitionStatusAction(definitionId: string, form
 }
 
 export async function recordMeasurementAction(formData: FormData) {
-  const returnTo = String(formData.get("returnTo") || "/command-center/scorecards");
-  await runFormAction(returnTo.startsWith("/command-center") ? returnTo : "/command-center/scorecards", async () => {
+  const returnTo = safeReturnTo(formData, "/command-center/scorecards");
+  await runFormAction(returnTo, async () => {
     const user = await requireGrowthEditor();
     const periodStart = parseCentralInput(formData.get("periodStart"));
     const periodEndInclusive = parseCentralInput(formData.get("periodEnd"));
@@ -238,8 +239,8 @@ export async function recordMeasurementAction(formData: FormData) {
 }
 
 export async function reviewMeasurementAction(measurementId: string, formData: FormData) {
-  const returnTo = String(formData.get("returnTo") || "/command-center/scorecards");
-  await runFormAction(returnTo.startsWith("/command-center") ? returnTo : "/command-center/scorecards", async () => {
+  const returnTo = safeReturnTo(formData, "/command-center/scorecards");
+  await runFormAction(returnTo, async () => {
     const user = await requireGrowthEditor();
     await prisma.$transaction(async (tx) => {
       const measurement = await tx.growthMeasurement.findUnique({ where: { id: measurementId }, select: { status: true, enteredById: true, reviewedAt: true } });
@@ -318,8 +319,8 @@ export async function addCampaignReviewAction(campaignId: string, formData: Form
 // Growth actions ---------------------------------------------------------
 
 export async function createGrowthActionAction(formData: FormData) {
-  const returnTo = String(formData.get("returnTo") || "/command-center/growth");
-  await runFormAction(returnTo.startsWith("/command-center") ? returnTo : "/command-center/growth", async () => {
+  const returnTo = safeReturnTo(formData, "/command-center/growth");
+  await runFormAction(returnTo, async () => {
     const user = await requireGrowthEditor();
     const status = z.enum(["OPEN", "IN_PROGRESS", "BLOCKED"]).parse(formData.get("status") || "OPEN") as GrowthActionStatus;
     const relationshipId = str(formData, "relationshipId");
@@ -340,8 +341,8 @@ export async function createGrowthActionAction(formData: FormData) {
 }
 
 export async function updateGrowthActionAction(actionId: string, formData: FormData) {
-  const returnTo = String(formData.get("returnTo") || "/command-center/growth");
-  await runFormAction(returnTo.startsWith("/command-center") ? returnTo : "/command-center/growth", async () => {
+  const returnTo = safeReturnTo(formData, "/command-center/growth");
+  await runFormAction(returnTo, async () => {
     const user = await requireGrowthEditor();
     const current = await prisma.growthAction.findUnique({ where: { id: actionId }, include: { relationship: { select: { nextAction: true } } } });
     if (!current) throw new Error("Action not found");
@@ -390,8 +391,8 @@ export async function updateRelationshipOperatingAction(relationshipId: string, 
 
 export async function verifyDestinationIdentityAction(accountId: string, formData: FormData) {
   const account = await prisma.socialAccount.findUnique({ where: { id: accountId }, select: { brandId: true } });
-  const returnTo = String(formData.get("returnTo") || (account ? `/command-center/brands/${account.brandId}` : "/command-center/settings/integrations"));
-  await runFormAction(returnTo.startsWith("/command-center") ? returnTo : "/command-center/settings/integrations", async () => {
+  const returnTo = safeReturnTo(formData, account ? `/command-center/brands/${account.brandId}` : "/command-center/settings/integrations");
+  await runFormAction(returnTo, async () => {
     const user = await requireGrowthEditor();
     if (!account) throw new Error("Account not found");
     const profileUrl = str(formData, "profileUrl");

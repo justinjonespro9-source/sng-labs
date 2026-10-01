@@ -10,7 +10,8 @@ import { parseContentModes, parseLines } from "@/lib/command-center/brand-brain"
 import { prisma } from "@/lib/prisma";
 import { writeSocialAuditEvent } from "@/lib/social-accounts/audit";
 import { assertActiveCampaignContract, changedMaterialFields, isValidDestinationUrl, parseMoneyToMinor, parseNonNegativeInteger, requiresActiveContract, type CampaignContractInput, type MaterialSnapshot } from "@/lib/growth/campaign-contract";
-import { runFormAction } from "@/lib/growth/form-action";
+import { runFormAction, runFormStateAction } from "@/lib/growth/form-action";
+import type { FormActionState } from "@/lib/growth/form-state";
 import { isSchedulableDestination } from "@/lib/growth/manual-publication";
 import { calendarDayKey, parseCentralInput } from "@/lib/growth/time";
 
@@ -86,8 +87,8 @@ function materialSnapshot(campaign: Parameters<typeof contractInput>[0] & { obje
   return { ownerId: campaign.ownerId, objective: campaign.objective, objectiveType: campaign.objectiveType, primaryAudience: campaign.primaryAudience, offer: campaign.offer, hypothesis: campaign.hypothesis, primaryCta: campaign.primaryCta, destinationUrl: campaign.destinationUrl, executionPlan: campaign.executionPlan, startsAt: calendarDayKey(campaign.startsAt), endsAt: calendarDayKey(campaign.endsAt), brandIds };
 }
 
-export async function createCampaign(formData: FormData) {
-  await runFormAction("/command-center/campaigns/new", async () => {
+export async function createCampaign(previous: FormActionState, formData: FormData) {
+  return runFormStateAction(previous, formData, async () => {
     const user = await requireEditor();
     const { brandIds, ...input } = campaignInput(formData);
     if (requiresActiveContract(null, input.status, false)) assertActiveCampaignContract(contractInput(input, brandIds, 0));
@@ -452,8 +453,8 @@ export async function updateCampaignStatus(campaignId: string, formData: FormDat
   });
 }
 
-export async function updateCampaign(campaignId: string, formData: FormData) {
-  await runFormAction(`/command-center/campaigns/${campaignId}/edit`, async () => {
+export async function updateCampaign(campaignId: string, previous: FormActionState, formData: FormData) {
+  return runFormStateAction(previous, formData, async () => {
     const user = await requireEditor();
     const { brandIds, ...input } = campaignInput(formData);
     await prisma.$transaction(async (tx) => {
