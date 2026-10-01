@@ -476,6 +476,89 @@ enum SportsWeeklyResultCategory {
   POSITION
 }
 
+enum GrowthStage {
+  DEVELOPMENT
+  VALIDATION
+  PILOT
+  ACQUISITION
+  RETENTION
+}
+
+enum GrowthRecordStatus {
+  DRAFT
+  CURRENT
+  SUPERSEDED
+  ARCHIVED
+}
+
+enum PortfolioAllocation {
+  PRIMARY_PUSH
+  ACTIVE_TEST
+  PREP
+  VALIDATION
+  MAINTENANCE
+  HOLD
+}
+
+enum CampaignReviewDecision {
+  CONTINUE
+  EXPAND
+  REVISE
+  STOP
+}
+
+enum RelationshipActivityDirection {
+  INBOUND
+  OUTBOUND
+  INTERNAL
+}
+
+enum GrowthFunnelStage {
+  REACH
+  VISIT
+  SIGNUP
+  ACTIVATION
+  REPEAT
+  REFERRAL
+}
+
+enum GrowthMetricUnit {
+  COUNT
+  RATE
+  AMOUNT
+}
+
+enum GrowthMetricAggregation {
+  SUM
+  LATEST
+  COHORT
+}
+
+enum GrowthMetricDefinitionStatus {
+  DRAFT
+  ACTIVE
+  RETIRED
+}
+
+enum GrowthMeasurementStatus {
+  UNKNOWN
+  REPORTED
+  REVIEWED
+}
+
+enum GrowthActionStatus {
+  OPEN
+  IN_PROGRESS
+  BLOCKED
+  DONE
+  CANCELLED
+}
+
+enum PublicationMethod {
+  MANUAL
+  API
+}
+
 model User {
   id                      String                      @id @default(cuid())
   name                    String?
@@ -494,6 +577,18 @@ model User {
   sportsStatRevisions     SportsStatRevision[]
   sportsScoringRuns       SportsScoringRun[]
   socialAuthorizations    SocialAuthorization[]
+  createdGrowthBriefs     BrandGrowthBrief[]          @relation("GrowthBriefCreatedBy")
+  approvedGrowthBriefs    BrandGrowthBrief[]          @relation("GrowthBriefApprovedBy")
+  portfolioDecisions      BrandPortfolioPriority[]    @relation("PortfolioPriorityDecidedBy")
+  ownedCampaigns          Campaign[]                  @relation("CampaignOwner")
+  campaignTargets         CampaignTarget[]            @relation("CampaignTargetCreatedBy")
+  campaignReviews         CampaignReview[]            @relation("CampaignReviewReviewedBy")
+  metricDefinitions       GrowthMetricDefinition[]    @relation("MetricDefinitionCreatedBy")
+  enteredMeasurements     GrowthMeasurement[]         @relation("MeasurementEnteredBy")
+  reviewedMeasurements    GrowthMeasurement[]         @relation("MeasurementReviewedBy")
+  ownedGrowthActions      GrowthAction[]              @relation("GrowthActionOwner")
+  createdGrowthActions    GrowthAction[]              @relation("GrowthActionCreatedBy")
+  recordedPublications    Publication[]               @relation("PublicationRecordedBy")
   createdAt               DateTime                    @default(now())
   updatedAt               DateTime                    @updatedAt
 }
@@ -578,6 +673,12 @@ model Brand {
   generationRuns             GenerationRun[]
   opportunityRecommendations OpportunityRecommendation[]
   sportsRelevancePolicies    BrandSportsRelevance[]
+  growthBriefs               BrandGrowthBrief[]
+  portfolioPriorities        BrandPortfolioPriority[]
+  campaignTargets            CampaignTarget[]
+  metricDefinitions          GrowthMetricDefinition[]
+  growthMeasurements         GrowthMeasurement[]
+  growthActions              GrowthAction[]
   createdAt                  DateTime                    @default(now())
   updatedAt                  DateTime                    @updatedAt
 }
@@ -913,19 +1014,23 @@ model Approval {
 }
 
 model Publication {
-  id              String            @id @default(cuid())
-  draftId         String            @unique
-  socialAccountId String
-  status          PublicationStatus @default(PLANNED)
-  scheduledFor    DateTime?
-  publishedAt     DateTime?
-  platformPostId  String?
-  platformUrl     String?
-  failureReason   String?
-  draft           ContentDraft      @relation(fields: [draftId], references: [id], onDelete: Cascade)
-  socialAccount   SocialAccount     @relation(fields: [socialAccountId], references: [id], onDelete: Restrict)
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
+  id               String             @id @default(cuid())
+  draftId          String             @unique
+  socialAccountId  String
+  status           PublicationStatus  @default(PLANNED)
+  scheduledFor     DateTime?
+  publishedAt      DateTime?
+  platformPostId   String?
+  platformUrl      String?
+  failureReason    String?
+  method           PublicationMethod?
+  recordedById     String?
+  confirmationNote String?            @db.Text
+  draft            ContentDraft       @relation(fields: [draftId], references: [id], onDelete: Cascade)
+  socialAccount    SocialAccount      @relation(fields: [socialAccountId], references: [id], onDelete: Restrict)
+  recordedBy       User?              @relation("PublicationRecordedBy", fields: [recordedById], references: [id], onDelete: SetNull)
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
 }
 
 model Campaign {
@@ -948,7 +1053,17 @@ model Campaign {
   startsAt                   DateTime?
   endsAt                     DateTime?
   active                     Boolean                     @default(true)
+  ownerId                    String?
+  offer                      String?                     @db.Text
+  destinationUrl             String?
+  executionPlan              String?                     @db.Text
+  hypothesis                 String?                     @db.Text
+  expectedMinutes            Int?
+  plannedSpendMinor          Int?
+  actualSpendMinor           Int?
+  currency                   String?
   program                    GrowthProgram?              @relation(fields: [programId], references: [id], onDelete: SetNull)
+  owner                      User?                       @relation("CampaignOwner", fields: [ownerId], references: [id], onDelete: SetNull)
   activations                CampaignActivation[]
   opportunities              CampaignOpportunity[]
   brands                     Brand[]                     @relation("BrandCampaigns")
@@ -957,14 +1072,20 @@ model Campaign {
   events                     GrowthEvent[]               @relation("CampaignEvents")
   organizations              Organization[]              @relation("CampaignOrganizations")
   relationships              Relationship[]
+  relationshipLinks          RelationshipCampaign[]
   activities                 RelationshipActivity[]
   attribution                CampaignAttribution[]
+  targets                    CampaignTarget[]
+  reviews                    CampaignReview[]
+  growthMeasurements         GrowthMeasurement[]
+  growthActions              GrowthAction[]
   generationRuns             GenerationRun[]
   opportunityRecommendations OpportunityRecommendation[]
   createdAt                  DateTime                    @default(now())
   updatedAt                  DateTime                    @updatedAt
 
   @@index([programId, status])
+  @@index([ownerId, status])
 }
 
 model GrowthProgram {
@@ -1014,6 +1135,8 @@ model CampaignActivation {
   activities                 RelationshipActivity[]
   generationRuns             GenerationRun[]
   opportunityRecommendations OpportunityRecommendation[]
+  campaignTargets            CampaignTarget[]
+  growthMeasurements         GrowthMeasurement[]
   createdAt                  DateTime                    @default(now())
   updatedAt                  DateTime                    @updatedAt
 
@@ -1038,6 +1161,7 @@ model Market {
   activations       CampaignActivation[]
   venues            Venue[]
   relevancePolicies BrandSportsRelevance[]
+  growthBriefs      BrandGrowthBrief[]
   createdAt         DateTime               @default(now())
   updatedAt         DateTime               @updatedAt
 }
@@ -1322,50 +1446,74 @@ model Contact {
 }
 
 model Relationship {
-  id             String                 @id @default(cuid())
-  name           String
-  stage          RelationshipStage      @default(PROSPECT)
-  organizationId String
-  contactId      String?
-  ownerId        String?
-  campaignId     String?
-  summary        String?
-  lastOutreachAt DateTime?
-  nextFollowUpAt DateTime?
-  organization   Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  contact        Contact?               @relation(fields: [contactId], references: [id], onDelete: SetNull)
-  owner          User?                  @relation(fields: [ownerId], references: [id], onDelete: SetNull)
-  campaign       Campaign?              @relation(fields: [campaignId], references: [id], onDelete: SetNull)
-  relevantBrands Brand[]                @relation("BrandRelationships")
-  activations    CampaignActivation[]   @relation("ActivationRelationships")
-  activities     RelationshipActivity[]
-  generationRuns GenerationRun[]
-  createdAt      DateTime               @default(now())
-  updatedAt      DateTime               @updatedAt
+  id               String                 @id @default(cuid())
+  name             String
+  stage            RelationshipStage      @default(PROSPECT)
+  organizationId   String
+  contactId        String?
+  ownerId          String?
+  campaignId       String?
+  summary          String?
+  lastOutreachAt   DateTime?
+  nextFollowUpAt   DateTime?
+  fitReason        String?                @db.Text
+  offer            String?                @db.Text
+  audience         String?                @db.Text
+  priority         ActivationPriority?
+  priorityEvidence String?                @db.Text
+  nextAction       String?                @db.Text
+  commitment       String?                @db.Text
+  outcome          String?                @db.Text
+  organization     Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  contact          Contact?               @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  owner            User?                  @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+  campaign         Campaign?              @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  campaignLinks    RelationshipCampaign[]
+  relevantBrands   Brand[]                @relation("BrandRelationships")
+  activations      CampaignActivation[]   @relation("ActivationRelationships")
+  activities       RelationshipActivity[]
+  generationRuns   GenerationRun[]
+  growthActions    GrowthAction[]
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
 
   @@index([stage, nextFollowUpAt])
   @@index([organizationId, updatedAt])
 }
 
+model RelationshipCampaign {
+  relationshipId String
+  campaignId     String
+  source         String       @default("OPERATOR")
+  relationship   Relationship @relation(fields: [relationshipId], references: [id], onDelete: Cascade)
+  campaign       Campaign     @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  createdAt      DateTime     @default(now())
+
+  @@id([relationshipId, campaignId])
+  @@index([campaignId])
+}
+
 model RelationshipActivity {
-  id             String              @id @default(cuid())
+  id             String                         @id @default(cuid())
   relationshipId String
   contactId      String?
   campaignId     String?
   activationId   String?
   executionType  ExecutionType?
   type           ActivityType
-  occurredAt     DateTime            @default(now())
+  direction      RelationshipActivityDirection?
+  occurredAt     DateTime                       @default(now())
   summary        String
   nextStep       String?
-  relationship   Relationship        @relation(fields: [relationshipId], references: [id], onDelete: Cascade)
-  contact        Contact?            @relation(fields: [contactId], references: [id], onDelete: SetNull)
-  campaign       Campaign?           @relation(fields: [campaignId], references: [id], onDelete: SetNull)
-  activation     CampaignActivation? @relation(fields: [activationId], references: [id], onDelete: SetNull)
-  createdAt      DateTime            @default(now())
+  relationship   Relationship                   @relation(fields: [relationshipId], references: [id], onDelete: Cascade)
+  contact        Contact?                       @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  campaign       Campaign?                      @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  activation     CampaignActivation?            @relation(fields: [activationId], references: [id], onDelete: SetNull)
+  createdAt      DateTime                       @default(now())
 
   @@index([relationshipId, occurredAt])
   @@index([campaignId, activationId, occurredAt])
+  @@index([direction, occurredAt])
 }
 
 model CampaignAttribution {
@@ -1965,4 +2113,209 @@ model GenerationRun {
   @@index([brandId, createdAt])
   @@index([status, createdAt])
   @@index([eventId, createdAt])
+}
+
+/// Time-bounded strategy for one Brand. Exactly one CURRENT revision per Brand is enforced by a partial unique index in SQL.
+model BrandGrowthBrief {
+  id                   String             @id @default(cuid())
+  brandId              String
+  revision             Int
+  stage                GrowthStage
+  status               GrowthRecordStatus @default(DRAFT)
+  priorityAudience     String?            @db.Text
+  marketId             String?
+  geographyNotes       String?            @db.Text
+  offer                String?            @db.Text
+  activationDefinition String?            @db.Text
+  repeatDefinition     String?            @db.Text
+  bottleneck           String?            @db.Text
+  primaryMotion        String?            @db.Text
+  capacityNotes        String?            @db.Text
+  effectiveAt          DateTime?
+  reviewAt             DateTime?
+  notes                String?            @db.Text
+  evidence             Json?
+  createdById          String?
+  approvedById         String?
+  approvedAt           DateTime?
+  supersedesId         String?            @unique
+  brand                Brand              @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  market               Market?            @relation(fields: [marketId], references: [id], onDelete: SetNull)
+  createdBy            User?              @relation("GrowthBriefCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  approvedBy           User?              @relation("GrowthBriefApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull)
+  supersedes           BrandGrowthBrief?  @relation("GrowthBriefLineage", fields: [supersedesId], references: [id], onDelete: Restrict)
+  supersededBy         BrandGrowthBrief?  @relation("GrowthBriefLineage")
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  @@unique([brandId, revision])
+  @@index([brandId, status])
+  @@index([status, reviewAt])
+}
+
+/// Human portfolio attention allocation. Exactly one CURRENT revision per Brand is enforced by a partial unique index in SQL.
+model BrandPortfolioPriority {
+  id           String                  @id @default(cuid())
+  brandId      String
+  revision     Int
+  allocation   PortfolioAllocation
+  status       GrowthRecordStatus      @default(CURRENT)
+  effectiveAt  DateTime
+  reviewAt     DateTime?
+  rationale    String                  @db.Text
+  evidence     Json?
+  weeklyHours  Int?
+  decidedById  String?
+  supersedesId String?                 @unique
+  brand        Brand                   @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  decidedBy    User?                   @relation("PortfolioPriorityDecidedBy", fields: [decidedById], references: [id], onDelete: SetNull)
+  supersedes   BrandPortfolioPriority? @relation("PortfolioPriorityLineage", fields: [supersedesId], references: [id], onDelete: Restrict)
+  supersededBy BrandPortfolioPriority? @relation("PortfolioPriorityLineage")
+  createdAt    DateTime                @default(now())
+
+  @@unique([brandId, revision])
+  @@index([brandId, status])
+  @@index([status, reviewAt])
+}
+
+model CampaignTarget {
+  id                 String                 @id @default(cuid())
+  campaignId         String
+  brandId            String
+  metricDefinitionId String
+  activationId       String?
+  targetValue        Decimal                @db.Decimal(18, 4)
+  baselineValue      Decimal?               @db.Decimal(18, 4)
+  periodStart        DateTime
+  periodEnd          DateTime
+  dueAt              DateTime?
+  notes              String?                @db.Text
+  createdById        String?
+  campaign           Campaign               @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  brand              Brand                  @relation(fields: [brandId], references: [id], onDelete: Restrict)
+  metricDefinition   GrowthMetricDefinition @relation(fields: [metricDefinitionId], references: [id], onDelete: Restrict)
+  activation         CampaignActivation?    @relation(fields: [activationId], references: [id], onDelete: SetNull)
+  createdBy          User?                  @relation("CampaignTargetCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+
+  @@index([campaignId, periodStart])
+  @@index([metricDefinitionId])
+}
+
+/// Append-only learning decisions for a Campaign.
+model CampaignReview {
+  id           String                 @id @default(cuid())
+  campaignId   String
+  decision     CampaignReviewDecision
+  learning     String                 @db.Text
+  evidence     Json?
+  reviewedById String?
+  reviewedAt   DateTime               @default(now())
+  campaign     Campaign               @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  reviewedBy   User?                  @relation("CampaignReviewReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull)
+  createdAt    DateTime               @default(now())
+
+  @@index([campaignId, reviewedAt])
+}
+
+/// A metric definition version never changes meaning in place; changes create a new version.
+model GrowthMetricDefinition {
+  id                    String                       @id @default(cuid())
+  brandId               String
+  key                   String
+  version               Int
+  label                 String
+  funnelStage           GrowthFunnelStage
+  unit                  GrowthMetricUnit
+  definition            String                       @db.Text
+  aggregation           GrowthMetricAggregation
+  numeratorDefinition   String?                      @db.Text
+  denominatorDefinition String?                      @db.Text
+  cohortBasis           String?                      @db.Text
+  freshnessDays         Int?
+  effectiveAt           DateTime
+  status                GrowthMetricDefinitionStatus @default(DRAFT)
+  createdById           String?
+  supersedesId          String?                      @unique
+  brand                 Brand                        @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  createdBy             User?                        @relation("MetricDefinitionCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  supersedes            GrowthMetricDefinition?      @relation("MetricDefinitionLineage", fields: [supersedesId], references: [id], onDelete: Restrict)
+  supersededBy          GrowthMetricDefinition?      @relation("MetricDefinitionLineage")
+  targets               CampaignTarget[]
+  measurements          GrowthMeasurement[]
+  createdAt             DateTime                     @default(now())
+  updatedAt             DateTime                     @updatedAt
+
+  @@unique([brandId, key, version])
+  @@index([brandId, status])
+}
+
+/// Null value means UNKNOWN; an explicit zero is a real report. Corrections supersede instead of double-counting.
+model GrowthMeasurement {
+  id           String                  @id @default(cuid())
+  definitionId String
+  brandId      String
+  periodStart  DateTime
+  periodEnd    DateTime
+  value        Decimal?                @db.Decimal(18, 4)
+  numerator    Decimal?                @db.Decimal(18, 4)
+  denominator  Decimal?                @db.Decimal(18, 4)
+  status       GrowthMeasurementStatus
+  source       String
+  sourceUrl    String?
+  asOfAt       DateTime
+  enteredById  String?
+  reviewedById String?
+  reviewedAt   DateTime?
+  campaignId   String?
+  activationId String?
+  scope        String?
+  cohortKey    String?
+  evidence     Json?
+  externalKey  String?
+  supersedesId String?                 @unique
+  definition   GrowthMetricDefinition  @relation(fields: [definitionId], references: [id], onDelete: Restrict)
+  brand        Brand                   @relation(fields: [brandId], references: [id], onDelete: Restrict)
+  campaign     Campaign?               @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  activation   CampaignActivation?     @relation(fields: [activationId], references: [id], onDelete: SetNull)
+  enteredBy    User?                   @relation("MeasurementEnteredBy", fields: [enteredById], references: [id], onDelete: SetNull)
+  reviewedBy   User?                   @relation("MeasurementReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull)
+  supersedes   GrowthMeasurement?      @relation("MeasurementLineage", fields: [supersedesId], references: [id], onDelete: Restrict)
+  supersededBy GrowthMeasurement?      @relation("MeasurementLineage")
+  createdAt    DateTime                @default(now())
+  updatedAt    DateTime                @updatedAt
+
+  @@unique([definitionId, externalKey])
+  @@index([definitionId, periodStart, periodEnd])
+  @@index([brandId, status, asOfAt])
+  @@index([campaignId, definitionId])
+}
+
+/// Actual operator work. Relationship next actions remain on Relationship and are not duplicated here.
+model GrowthAction {
+  id               String             @id @default(cuid())
+  title            String
+  ownerId          String?
+  brandId          String?
+  campaignId       String?
+  relationshipId   String?
+  status           GrowthActionStatus @default(OPEN)
+  operatorPriority Int?
+  dueAt            DateTime?
+  rationale        String?            @db.Text
+  evidence         String?            @db.Text
+  blocker          String?            @db.Text
+  completedAt      DateTime?
+  createdById      String?
+  owner            User?              @relation("GrowthActionOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  createdBy        User?              @relation("GrowthActionCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  brand            Brand?             @relation(fields: [brandId], references: [id], onDelete: SetNull)
+  campaign         Campaign?          @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  relationship     Relationship?      @relation(fields: [relationshipId], references: [id], onDelete: SetNull)
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  @@index([status, operatorPriority, dueAt])
+  @@index([ownerId, status])
 }
