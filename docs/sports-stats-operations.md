@@ -100,3 +100,11 @@ the following stages in order, stopping on any failed check or unexpected diff:
    writes or duplicates.
 9. Verify Sports Overview and Data Quality show complete source-declared coverage,
    expected record counts, zero unknown participation, and no new open quality issues.
+
+## Downstream canonical grading evidence
+
+The canonical export readiness layer requires independent reviewed event finality,
+full-week schedule/population/participation evidence and exact identity reconciliation.
+Existing factual sourceComplete declarations alone do not authorize downstream grading.
+See [Canonical NFL weekly export V1](sports-canonical-export-contract.md). This feature
+does not change factual ingestion, automatic event-status updates or scoring facts.

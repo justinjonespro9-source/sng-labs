@@ -1,0 +1,82 @@
+import { PrismaClient } from '@prisma/client';
+import { canonicalFixture,addNonparticipant } from '../lib/sports/scoring/canonical-fixtures.test-helper';
+import { NFL_HALF_PPR_SNG_V1,NFL_HALF_PPR_SNG_V1_CHECKSUM,NFL_SCORING_ENGINE_VERSION } from '../lib/sports/scoring/rules';
+import { reviewWeeklyManifest } from '../lib/sports/participation-evidence';
+import { calculateNflWeekPreview } from '../lib/sports/scoring/workflow';
+import { inspectCanonicalReadiness,acceptCanonicalWeek,storedCanonicalDownload,withdrawCanonicalPublication } from '../lib/sports/scoring/publication';
+import { verifyCanonicalArtifact } from '../lib/sports/scoring/export';
+import assert from 'node:assert/strict';
+import {writeFileSync,mkdirSync} from 'node:fs';
+const db=new PrismaClient();
+if(!process.env.DATABASE_URL?.includes('127.0.0.1:55432'))throw Error('Local fixture guard');
+mkdirSync('tmp',{recursive:true});
+const f=canonicalFixture(25);
+await db.user.create({data:{id:'fixture-owner',email:'canonical-preview@example.invalid',name:'Canonical Preview Operator',role:'OWNER'}});
+await db.user.create({data:{id:'fixture-viewer',role:'VIEWER'}});
+const season=await db.sportsSeason.create({data:{league:'NFL',year:2026,label:'Fixture NFL 2026'}});
+const market=await db.market.create({data:{key:'fixture-market',name:'Fixture Market'}});
+const teams=await Promise.all(['team-a','team-b'].map((key,i)=>db.team.create({data:{key,name:key,sport:"FOOTBALL",marketId:market.id,league:'NFL',abbreviation:i===0?'AAA':'BBB'}})));
+const event=await db.growthEvent.create({data:{key:'game',name:'Fixture Game',type:'GAME',league:'NFL',sport:'FOOTBALL',season:2026,week:1,status:'FINAL',startsAt:new Date('2026-09-01T00:00:00Z'),homeTeamId:teams[0].id,awayTeamId:teams[1].id}});
+await db.sportsScoringRuleset.create({data:{code:'SNG_NFL_HALF_PPR',version:1,status:'ACTIVE',displayName:'NFL Half-PPR — SNG V1',sport:'FOOTBALL',league:'NFL',definition:JSON.parse(JSON.stringify(NFL_HALF_PPR_SNG_V1)),definitionChecksum:NFL_HALF_PPR_SNG_V1_CHECKSUM,engineFamily:'sng-nfl-fantasy-engine',minimumEngineVersion:NFL_SCORING_ENGINE_VERSION}});
+for(const p of f.manifest.participants){
+ const team=teams.find(t=>t.key===p.teamKey)!;
+ await db.sportsParticipant.create({data:{id:p.participantId,kind:p.kind,canonicalName:p.participantId,...(p.kind==='PLAYER'?{player:{create:{}}}:{teamDefense:{create:{teamId:team.id}}}),externalIdentities:{create:p.identities.map(i=>({provider:i.provider,externalId:i.externalId,verifiedAt:new Date(),sourceLabel:'Fixture reviewed crosswalk'}))},rosterMemberships:{create:{seasonId:season.id,teamId:team.id,fantasyPosition:p.position,sourcePosition:p.sourcePosition,sourceLabel:'Fixture weekly roster'}}}});
+}
+for(const r of f.observation.imports){
+ const payload=r.payload as {rows:Array<{eventKey:string}>};
+ const run=await db.sportsIngestionRun.create({data:{id:r.id,type:r.type as 'PLAYER_EVENT_STATS'|'DEFENSE_EVENT_STATS',status:'APPLIED',seasonId:season.id,sourceType:'TEST_FIXTURE',sourceLabel:'Fixture only',checksum:r.checksum,parserVersion:r.parserVersion,rawPayload:JSON.stringify(payload),records:{create:(r.records??[]).map((p,i)=>({rowNumber:i+1,status:'CREATE',participantId:p.participantId,eventId:event.id,rawData:p.normalizedData as object,normalizedData:p.normalizedData as object}))}}});
+ for(const row of [...f.observation.players,...f.observation.defenses].filter(s=>(s.provenance as {ingestionRunId:string}).ingestionRunId===run.id)){
+  const base={id:row.id,participantId:row.participantId,eventId:event.id,ingestionRunId:run.id,finality:'FINAL' as const,sourceType:'TEST_FIXTURE',sourceLabel:'Fixture complete facts',...row.facts};
+  if('participationStatus' in row) await db.nflPlayerEventStat.create({data:{...base,participationStatus:'PARTICIPATED_ZERO'}});
+  else await db.nflDefenseEventStat.create({data:{...base,teamId:teams.find(t=>t.key===row.teamKey)!.id}});
+ }
+}
+assert.equal((await inspectCanonicalReadiness(db,2026,1)).readiness.ready,false);
+await assert.rejects(()=>reviewWeeklyManifest(db,f.manifest,'fixture-viewer','unauthorized'),/OWNER or ADMIN/);
+const m=await reviewWeeklyManifest(db,f.manifest,'fixture-owner','Reviewed fixture evidence only');
+const review=await inspectCanonicalReadiness(db,2026,1,m.id);
+assert.deepEqual(review.readiness.blockers,[]);
+const calc=await calculateNflWeekPreview({year:2026,week:1,mode:'SHADOW',manifestId:m.id,createdById:'fixture-owner'},db);
+assert.equal((await db.sportsScoringRuleset.findFirst())!.status,'ACTIVE');
+await assert.rejects(()=>acceptCanonicalWeek(db,{runId:calc.run.id,manifestId:m.id,actorId:'fixture-owner',reason:'stale',reviewFingerprint:'stale'}),/Stale review/);
+const input={runId:calc.run.id,manifestId:m.id,actorId:'fixture-owner',reason:'Fixture canonical acceptance',reviewFingerprint:review.readiness.observationFingerprint};
+const p=await acceptCanonicalWeek(db,input);
+assert.equal((await acceptCanonicalWeek(db,input)).id,p.id);
+const d1=await storedCanonicalDownload(db,p.id),d2=await storedCanonicalDownload(db,p.id);
+assert.equal(d1.bytes,d2.bytes);assert.equal(verifyCanonicalArtifact(d1.bytes).payload.resultSets.find(s=>s.positionCode==='WR')!.fieldSize,25);
+await assert.rejects(()=>db.sportsCanonicalPublication.update({where:{id:p.id},data:{canonicalBytes:'tampered'}}),/immutable/);
+await db.$disconnect();
+await assert.rejects(()=>db.sportsWeeklyCoverageManifest.update({where:{id:m.id},data:{reason:'tampered'}}),/immutable/);
+await db.$disconnect();
+const proof=await db.sportsParticipationEvidence.findFirstOrThrow({where:{manifestId:m.id}});
+await assert.rejects(()=>db.sportsParticipationEvidence.delete({where:{id:proof.id}}),/cannot be deleted/);
+await db.$disconnect();
+await withdrawCanonicalPublication(db,p.id,'fixture-owner','Fixture withdrawal');
+assert.equal((await storedCanonicalDownload(db,p.id)).bytes,d1.bytes);
+assert.equal((await db.sportsCanonicalPublication.findUniqueOrThrow({where:{id:p.id}})).state,'WITHDRAWN');
+// Fixture-only official correction and affirmative DNP evidence exercise the full revision path.
+const correction=await db.sportsIngestionRun.create({data:{id:'fixture-correction',type:'EVENT_STAT_CORRECTION',status:'APPLIED',seasonId:season.id,sourceType:'TEST_FIXTURE',sourceLabel:'Fixture official correction',checksum:'c'.repeat(64),parserVersion:'fixture',rawPayload:JSON.stringify({...f.observation.imports[0].payload as object,correctionReason:'Fixture correction'}),records:{create:{rowNumber:1,status:'UPDATE',participantId:'QB',eventId:event.id,rawData:{eventKey:'game'},normalizedData:{eventKey:'game'}}}}});
+await db.sportsStatRevision.create({data:{kind:'PLAYER',playerStatId:'stat-QB',ingestionRunId:correction.id,correctedById:'fixture-owner',previousValues:{passingYards:0},newValues:{passingYards:10},reason:'Fixture official correction'}});
+await db.nflPlayerEventStat.update({where:{id:'stat-QB'},data:{passingYards:10,participationStatus:'PARTICIPATED_WITH_STATS',finality:'CORRECTED',ingestionRunId:correction.id}});
+assert.equal((await inspectCanonicalReadiness(db,2026,1,m.id)).readiness.ready,false);
+f.manifest.participants.find(x=>x.participantId==='QB')!.state='PARTICIPATED_WITH_STATS';
+addNonparticipant(f.manifest,f.observation);
+await db.sportsParticipant.create({data:{id:'DNP',kind:'PLAYER',canonicalName:'Fixture affirmative DNP',player:{create:{}},externalIdentities:{create:{provider:'nflcom-bootstrap',externalId:'DNP',verifiedAt:new Date()}},rosterMemberships:{create:{seasonId:season.id,teamId:teams[0].id,fantasyPosition:'QB',sourcePosition:'QB'}}}});
+f.manifest.populationEvidence={...f.manifest.populationEvidence,label:'Fixture revised population evidence'};
+const m2=await reviewWeeklyManifest(db,f.manifest,'fixture-owner','Fixture corrected and DNP evidence review');
+const rev2=await inspectCanonicalReadiness(db,2026,1,m2.id);assert.deepEqual(rev2.readiness.blockers,[]);
+const calc2=await calculateNflWeekPreview({year:2026,week:1,mode:'SHADOW',manifestId:m2.id,createdById:'fixture-owner'},db);
+const p2=await acceptCanonicalWeek(db,{runId:calc2.run.id,manifestId:m2.id,actorId:'fixture-owner',reason:'Fixture corrected revision',reviewFingerprint:rev2.readiness.observationFingerprint});
+assert.equal(p2.revision,2);assert.equal(p2.supersedesId,p.id);
+const a2=verifyCanonicalArtifact((await storedCanonicalDownload(db,p2.id)).bytes);
+assert.equal(a2.payload.participationLedger.find(x=>x.participantId==='DNP')!.pointsHundredths,null);
+assert.equal(a2.payload.participationLedger.find(x=>x.participantId==='DNP')!.competitionRank,null);
+assert.equal(a2.payload.resultSets.find(x=>x.positionCode==='QB')!.entries[0].pointsHundredths,40);
+assert.equal((await storedCanonicalDownload(db,p.id)).bytes,d1.bytes);
+await assert.rejects(()=>db.sportsCanonicalPublication.create({data:{...p2,id:'fixture-duplicate-current',revision:3,supersedesId:null,scoringRunId:calc.run.id,manifestId:m.id}}));
+await db.$disconnect();
+console.log('Correction chain, unranked affirmative DNP, immutable prior bytes and one-current constraint passed');
+writeFileSync('tmp/canonical-local-e2e.json',JSON.stringify({fixtureOnly:true,acceptedArtifact:p.id,manifest:m.id,checks:['ACTIVE unchanged','exact readiness','unauthorized rejected','stale rejected','idempotent acceptance','stored byte replay','25 WR complete','publication immutable','manifest immutable','evidence immutable','withdrawal audit'],checksum:d1.checksum},null,2));
+writeFileSync('tmp/canonical-fixture-manifest.json',JSON.stringify(f.manifest));
+console.log('Local fixture E2E passed: calculation → review → acceptance → immutable repeat download → audited withdrawal');
+await db.$disconnect();

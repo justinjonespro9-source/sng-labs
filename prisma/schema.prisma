@@ -493,6 +493,8 @@ model User {
   sportsIngestionRuns     SportsIngestionRun[]
   sportsStatRevisions     SportsStatRevision[]
   sportsScoringRuns       SportsScoringRun[]
+  canonicalManifests      SportsWeeklyCoverageManifest[]
+  canonicalPublications   SportsCanonicalPublication[]
   socialAuthorizations    SocialAuthorization[]
   createdAt               DateTime                    @default(now())
   updatedAt               DateTime                    @updatedAt
@@ -1801,6 +1803,7 @@ model SportsScoringRun {
   createdBy           User?                        @relation(fields: [createdById], references: [id], onDelete: SetNull)
   season              SportsSeason                 @relation(fields: [seasonId], references: [id], onDelete: Restrict)
   ruleset             SportsScoringRuleset         @relation(fields: [rulesetId], references: [id], onDelete: Restrict)
+  canonicalPublications SportsCanonicalPublication[]
   inputSnapshots      SportsScoringInputSnapshot[]
   derivedPerformances SportsDerivedPerformance[]
   weeklyResultSets    SportsWeeklyResultSet[]
@@ -1965,4 +1968,69 @@ model GenerationRun {
   @@index([brandId, createdAt])
   @@index([status, createdAt])
   @@index([eventId, createdAt])
+}
+
+enum SportsCanonicalPublicationState {
+  ACCEPTED
+  SUPERSEDED
+  WITHDRAWN
+}
+
+model SportsWeeklyCoverageManifest {
+  id                    String                        @id @default(cuid())
+  league                String
+  seasonYear            Int
+  week                  Int
+  payload               Json
+  checksum              String                        @unique
+  observedFingerprint   String
+  reviewedById          String
+  reviewedAt            DateTime                      @default(now())
+  reason                String
+  reviewedBy            User                          @relation(fields: [reviewedById], references: [id], onDelete: Restrict)
+  participationEvidence SportsParticipationEvidence[]
+  publications          SportsCanonicalPublication[]
+
+  @@index([league, seasonYear, week])
+}
+
+model SportsParticipationEvidence {
+  id            String                       @id @default(cuid())
+  manifestId    String
+  participantId String
+  eventKey      String?
+  state         String
+  evidence      Json
+  checksum      String
+  manifest      SportsWeeklyCoverageManifest @relation(fields: [manifestId], references: [id], onDelete: Restrict)
+
+  @@unique([manifestId, participantId])
+}
+
+model SportsCanonicalPublication {
+  id                 String                          @id
+  seriesKey          String
+  revision           Int
+  scoringRunId       String
+  manifestId         String
+  acceptedById       String
+  acceptedAt         DateTime
+  reason             String
+  state              SportsCanonicalPublicationState @default(ACCEPTED)
+  supersedesId       String?                         @unique
+  authorityChangedAt DateTime?
+  authorityReason    String?
+  schemaVersion      String
+  canonicalBytes     String                          @db.Text
+  contentChecksum    String
+  readinessChecksum  String
+  scoringRun         SportsScoringRun                @relation(fields: [scoringRunId], references: [id], onDelete: Restrict)
+  manifest           SportsWeeklyCoverageManifest    @relation(fields: [manifestId], references: [id], onDelete: Restrict)
+  acceptedBy         User                            @relation(fields: [acceptedById], references: [id], onDelete: Restrict)
+  supersedes         SportsCanonicalPublication?     @relation("CanonicalRevision", fields: [supersedesId], references: [id], onDelete: Restrict)
+  supersededBy       SportsCanonicalPublication?     @relation("CanonicalRevision")
+
+  @@unique([seriesKey, revision])
+  @@unique([seriesKey, scoringRunId, manifestId])
+  @@index([seriesKey, state])
 }

@@ -14,7 +14,7 @@ V1D keeps canonical facts immutable and separate from fantasy interpretation:
 - Participation: `PARTICIPATED_WITH_STATS` and `PARTICIPATED_ZERO` are scorable. Unknown and DNP fail closed.
 - D/ST: `pointsAllowed` is read as an explicit V1C.1 fact. Only its tier interpretation occurs in V1D.
 
-Rulesets are immutable by `(code, version)` and content checksum. Unknown identifiers fail closed. Preview creates a DRAFT ruleset only; activation and publication are separate Production-controlled operations.
+Rulesets are immutable by `(code, version)` and content checksum. Unknown identifiers fail closed. The legacy preview path may create a missing DRAFT ruleset and never downgrades an ACTIVE ruleset. ACTIVE calculations require a reviewed weekly manifest through the canonical workflow. Activation and publication require their own authorization.
 
 ## Preview and replay
 
@@ -33,3 +33,12 @@ Each derived performance points to its exact factual snapshot. When a factual co
 7. Obtain explicit Production migration/activation/publication authorization.
 
 The shared derived models use generic sport, league, season, participant, event, ruleset, input snapshot, derived performance, and result-set concepts. NFL factual adapters and the NFL engine remain sport-specific so future NBA, NHL, MLB, and NCAA engines do not inherit NFL fields.
+
+## Canonical publication/export V1
+
+See [Canonical NFL weekly export V1](sports-canonical-export-contract.md). An ACTIVE
+supported ruleset now calculates with reviewed frozen weekly eligibility evidence.
+Completed SHADOW calculation and explicit ACCEPTED publication are separate facts.
+The canonical review page performs full-week evidence and fingerprint validation;
+old FINAL/sourceComplete flags are not accepted as proof. Publication freezes JSON
+bytes; repeat export downloads those bytes. Production rollout remains gated.

@@ -1,5 +1,8 @@
 import { Prisma, type SportsScoringRunMode } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { manifestSchema, POSITIONS } from "./export-schema";
+import { frozenWeeklyEligibility, scorableParticipation } from "./weekly-eligibility";
+import { validateSupportedRuleset } from "./readiness";
 import { fingerprint } from "./canonical-json";
 import { competitionRank } from "./competition-rank";
 import { adaptNflDefenseFacts, adaptNflPlayerFacts } from "./nfl-adapter";
@@ -10,7 +13,7 @@ type SourceInput = {
   kind: "PLAYER" | "TEAM_DEFENSE"; sourceEntityType: string; sourceEntityId: string;
   participantId: string; eventId: string; ingestionRunId: string; revisionId: string | null;
   sourceFinality: "PROVISIONAL" | "FINAL" | "CORRECTED" | "VOID";
-  positionCode: string; facts: Record<string, unknown>; revisionFingerprint: string;
+  positionCode: string; eligibilityFingerprint?: string; facts: Record<string, unknown>; revisionFingerprint: string;
 };
 
 export async function ensureDraftNflRuleset(client = prisma) {
@@ -28,21 +31,25 @@ export async function ensureDraftNflRuleset(client = prisma) {
   });
 }
 
-export async function calculateNflWeekPreview({ year, week, mode = "PREVIEW", createdById }: { year: number; week: number; mode?: SportsScoringRunMode; createdById?: string }) {
+export async function calculateNflWeekPreview({ year, week, mode = "PREVIEW", createdById, manifestId }: { year: number; week: number; mode?: SportsScoringRunMode; createdById?: string; manifestId?: string }, client = prisma) {
   if (mode === "PUBLISHED") throw new Error("Production publication is outside the Preview/Shadow workflow");
-  const season = await prisma.sportsSeason.findUniqueOrThrow({ where: { league_year: { league: "NFL", year } } });
-  const ruleset = await ensureDraftNflRuleset();
-  if (ruleset.status === "ACTIVE") throw new Error("Preview workflow refuses an ACTIVE ruleset");
+  const season = await client.sportsSeason.findUniqueOrThrow({ where: { league_year: { league: "NFL", year } } });
+  const ruleset = await ensureDraftNflRuleset(client);
+  validateSupportedRuleset(ruleset);
+  const reviewedManifest = manifestId ? await client.sportsWeeklyCoverageManifest.findUniqueOrThrow({ where: { id: manifestId } }) : null;
+  const manifest = reviewedManifest ? manifestSchema.parse(reviewedManifest.payload) : null;
+  if (manifest && (manifest.season !== year || manifest.week !== week)) throw new Error("Manifest week mismatch");
+  if (ruleset.status === "ACTIVE" && !manifest) throw new Error("ACTIVE calculation requires reviewed frozen weekly eligibility evidence");
 
   const [playerStats, defenseStats] = await Promise.all([
-    prisma.nflPlayerEventStat.findMany({
+    client.nflPlayerEventStat.findMany({
       where: { event: { league: "NFL", season: year, week }, finality: { in: ["FINAL", "CORRECTED"] } },
-      include: { revisions: { orderBy: { createdAt: "desc" }, take: 1 }, participant: { include: { rosterMemberships: { where: { seasonId: season.id }, orderBy: { updatedAt: "desc" } } } } },
+      include: { event: true, revisions: { orderBy: { createdAt: "desc" }, take: 1 }, participant: { include: { rosterMemberships: { where: { seasonId: season.id }, orderBy: { updatedAt: "desc" } } } } },
       orderBy: { id: "asc" },
     }),
-    prisma.nflDefenseEventStat.findMany({
+    client.nflDefenseEventStat.findMany({
       where: { event: { league: "NFL", season: year, week }, finality: { in: ["FINAL", "CORRECTED"] } },
-      include: { revisions: { orderBy: { createdAt: "desc" }, take: 1 } }, orderBy: { id: "asc" },
+      include: { event: true, revisions: { orderBy: { createdAt: "desc" }, take: 1 } }, orderBy: { id: "asc" },
     }),
   ]);
 
@@ -50,33 +57,37 @@ export async function calculateNflWeekPreview({ year, week, mode = "PREVIEW", cr
   const defenseFields = ["sacks", "defensiveInterceptions", "fumbleRecoveries", "defensiveTouchdowns", "specialTeamsTouchdowns", "safeties", "blockedKicks", "pointsAllowed"] as const;
   const inputs: SourceInput[] = [];
   for (const stat of playerStats) {
+    if (!scorableParticipation(stat.participationStatus)) continue;
     const facts: Record<string, unknown> = Object.fromEntries(playerFields.map((field) => [field, stat[field]]));
     facts.participationStatus = stat.participationStatus;
     const membership = stat.participant.rosterMemberships[0];
-    if (!membership) throw new Error(`No NFL ${year} roster membership for participant ${stat.participantId}`);
+    const eligibility = manifest ? frozenWeeklyEligibility(manifest.participants, stat.participantId, stat.event.key ?? stat.eventId) : null;
+    if (!membership && !eligibility) throw new Error(`No NFL ${year} roster membership for participant ${stat.participantId}`);
     const revisionId = stat.revisions[0]?.id ?? null;
-    inputs.push({ kind: "PLAYER", sourceEntityType: "NflPlayerEventStat", sourceEntityId: stat.id, participantId: stat.participantId, eventId: stat.eventId, ingestionRunId: stat.ingestionRunId, revisionId, sourceFinality: stat.finality, positionCode: membership.fantasyPosition, facts, revisionFingerprint: fingerprint({ id: stat.id, revisionId, facts, finality: stat.finality }) });
+    inputs.push({ kind: "PLAYER", sourceEntityType: "NflPlayerEventStat", sourceEntityId: stat.id, participantId: stat.participantId, eventId: stat.eventId, ingestionRunId: stat.ingestionRunId, revisionId, sourceFinality: stat.finality, positionCode: eligibility?.position ?? membership!.fantasyPosition, ...(eligibility ? { eligibilityFingerprint: fingerprint(eligibility) } : {}), facts, revisionFingerprint: fingerprint({ id: stat.id, revisionId, facts, finality: stat.finality }) });
   }
   for (const stat of defenseStats) {
+    const eligibility = manifest ? frozenWeeklyEligibility(manifest.participants, stat.participantId, stat.event.key ?? stat.eventId) : null;
+    if (eligibility && eligibility.position !== "DEF") throw new Error("Defense eligibility mismatch");
     const facts = Object.fromEntries(defenseFields.map((field) => [field, stat[field]]));
     const revisionId = stat.revisions[0]?.id ?? null;
-    inputs.push({ kind: "TEAM_DEFENSE", sourceEntityType: "NflDefenseEventStat", sourceEntityId: stat.id, participantId: stat.participantId, eventId: stat.eventId, ingestionRunId: stat.ingestionRunId, revisionId, sourceFinality: stat.finality, positionCode: "DEF", facts, revisionFingerprint: fingerprint({ id: stat.id, revisionId, facts, finality: stat.finality }) });
+    inputs.push({ kind: "TEAM_DEFENSE", sourceEntityType: "NflDefenseEventStat", sourceEntityId: stat.id, participantId: stat.participantId, eventId: stat.eventId, ingestionRunId: stat.ingestionRunId, revisionId, sourceFinality: stat.finality, positionCode: "DEF", ...(eligibility ? { eligibilityFingerprint: fingerprint(eligibility) } : {}), facts, revisionFingerprint: fingerprint({ id: stat.id, revisionId, facts, finality: stat.finality }) });
   }
   if (inputs.length === 0) throw new Error(`No final NFL ${year} Week ${week} factual inputs`);
 
   const prepared = inputs.map((input) => {
     const normalizedFacts = input.kind === "PLAYER" ? adaptNflPlayerFacts(input.facts) : adaptNflDefenseFacts(input.facts);
-    const inputChecksum = fingerprint({ kind: input.kind, participantId: input.participantId, eventId: input.eventId, revisionFingerprint: input.revisionFingerprint, facts: normalizedFacts });
+    const inputChecksum = fingerprint({ kind: input.kind, participantId: input.participantId, eventId: input.eventId, revisionFingerprint: input.revisionFingerprint, ...(input.eligibilityFingerprint ? { eligibilityFingerprint: input.eligibilityFingerprint } : {}), facts: normalizedFacts });
     const scored = input.kind === "PLAYER" ? scoreNflPlayer(normalizedFacts as ReturnType<typeof adaptNflPlayerFacts>) : scoreNflDefense(normalizedFacts as ReturnType<typeof adaptNflDefenseFacts>);
     const resultFingerprint = fingerprint({ inputChecksum, rulesetChecksum: NFL_HALF_PPR_SNG_V1_CHECKSUM, engineVersion: NFL_SCORING_ENGINE_VERSION, pointsHundredths: scored.pointsHundredths, components: scored.components });
     return { ...input, normalizedFacts, inputChecksum, scored, resultFingerprint };
   });
   const inputSetChecksum = fingerprint(prepared.map(({ inputChecksum }) => inputChecksum).sort());
-  const runFingerprint = fingerprint({ sport: "FOOTBALL", league: "NFL", year, week, mode, rulesetChecksum: NFL_HALF_PPR_SNG_V1_CHECKSUM, engineVersion: NFL_SCORING_ENGINE_VERSION, inputSetChecksum });
-  const replay = await prisma.sportsScoringRun.findUnique({ where: { runFingerprint }, include: { inputSnapshots: true, derivedPerformances: true, weeklyResultSets: { include: { entries: true } } } });
+  const runFingerprint = fingerprint({ sport: "FOOTBALL", league: "NFL", year, week, mode, rulesetChecksum: NFL_HALF_PPR_SNG_V1_CHECKSUM, engineVersion: NFL_SCORING_ENGINE_VERSION, inputSetChecksum, ...(manifest ? { eligibilityPolicyVersion: NFL_POSITION_ELIGIBILITY_VERSION, manifestChecksum: reviewedManifest!.checksum } : {}) });
+  const replay = await client.sportsScoringRun.findUnique({ where: { runFingerprint }, include: { inputSnapshots: true, derivedPerformances: true, weeklyResultSets: { include: { entries: true } } } });
   if (replay) return { run: replay, replayed: true };
 
-  return prisma.$transaction(async (tx) => {
+  return client.$transaction(async (tx) => {
     const run = await tx.sportsScoringRun.create({ data: {
       createdById, seasonId: season.id, rulesetId: ruleset.id, mode, status: "PENDING",
       sport: "FOOTBALL", league: "NFL", seasonYear: year, week,
@@ -105,28 +116,28 @@ export async function calculateNflWeekPreview({ year, week, mode = "PREVIEW", cr
       derived.push({ id: performance.id, participantId: item.participantId, positionCode: item.positionCode, pointsHundredths: item.scored.pointsHundredths });
     }
     let resultSetCount = 0;
-    for (const positionCode of [...new Set(derived.map((item) => item.positionCode))].sort()) {
+    for (const positionCode of (manifest ? [...POSITIONS] : [...new Set(derived.map((item) => item.positionCode))].sort())) {
       const field = derived.filter((item) => item.positionCode === positionCode);
       const rankings = competitionRank(field.map((item) => ({ participantId: item.participantId, derivedPerformanceId: item.id, pointsHundredths: item.pointsHundredths })));
       const resultSetChecksum = fingerprint({ runFingerprint, positionCode, rankings });
       await tx.sportsWeeklyResultSet.create({ data: {
         scoringRunId: run.id, seasonId: season.id, rulesetId: ruleset.id, sport: "FOOTBALL", league: "NFL", seasonYear: year, week,
         positionCode, eligibilityPolicyVersion: NFL_POSITION_ELIGIBILITY_VERSION, inputSetChecksum, resultSetChecksum,
-        finality: "FINAL", fieldSize: rankings.length, sourceComplete: true,
+        finality: "PROVISIONAL", fieldSize: rankings.length, sourceComplete: false,
         entries: { create: rankings.map((entry) => ({
           participantId: entry.participantId, derivedPerformanceId: entry.derivedPerformanceId, positionCode,
           pointsHundredths: entry.pointsHundredths, fantasyPoints: new Prisma.Decimal(entry.fantasyPoints),
           competitionRank: entry.competitionRank, tieGroupKey: entry.tieGroupKey, tieGroupSize: entry.tieGroupSize,
           displayOrdinal: entry.displayOrdinal, fieldSize: entry.fieldSize,
           isTop3: entry.isTop3, isTop10: entry.isTop10, isTop15: entry.isTop15,
-          eligibilityEvidence: { policyVersion: NFL_POSITION_ELIGIBILITY_VERSION, positionCode },
+          eligibilityEvidence: { policyVersion: NFL_POSITION_ELIGIBILITY_VERSION, positionCode, manifestChecksum: reviewedManifest?.checksum ?? null, frozenEligibility: manifest?.participants.find(p => p.participantId === entry.participantId) ?? null },
         })) },
       } });
       resultSetCount++;
     }
     const completed = await tx.sportsScoringRun.update({ where: { id: run.id }, data: {
       status: "COMPLETED", calculatedCount: derived.length, resultSetCount, completedAt: new Date(),
-      summary: { playerInputs: playerStats.length, defenseInputs: defenseStats.length, positions: resultSetCount },
+      summary: { playerInputs: playerStats.length, defenseInputs: defenseStats.length, positions: resultSetCount, manifestChecksum: reviewedManifest?.checksum ?? null, fingerprintContract: manifest ? "FROZEN_WEEKLY_ELIGIBILITY/1" : "LEGACY_PREVIEW" },
     }, include: { inputSnapshots: true, derivedPerformances: true, weeklyResultSets: { include: { entries: true } } } });
     return { run: completed, replayed: false };
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
