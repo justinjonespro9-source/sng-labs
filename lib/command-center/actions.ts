@@ -12,6 +12,7 @@ import { writeSocialAuditEvent } from "@/lib/social-accounts/audit";
 import { assertActiveCampaignContract, changedMaterialFields, isValidDestinationUrl, parseMoneyToMinor, parseNonNegativeInteger, requiresActiveContract, type CampaignContractInput, type MaterialSnapshot } from "@/lib/growth/campaign-contract";
 import { runFormAction, runFormStateAction } from "@/lib/growth/form-action";
 import type { FormActionState } from "@/lib/growth/form-state";
+import { isSchedulableDestination } from "@/lib/growth/manual-publication";
 import { calendarDayKey, parseCentralInput } from "@/lib/growth/time";
 
 const text = z.string().trim().min(1).max(500);
@@ -314,15 +315,15 @@ export async function updateContentDraft(draftId: string, formData: FormData) {
   const input = z.object({ brandId: text, objective: text, hook: text, rationale: text, body: z.string().trim().min(1).max(20000), callToAction: optionalText, visualBrief: optionalText, socialAccountId: optionalText }).parse({
     brandId: formData.get("brandId"), objective: formData.get("objective"), hook: formData.get("hook"), rationale: formData.get("rationale"), body: formData.get("body"), callToAction: String(formData.get("callToAction") ?? ""), visualBrief: String(formData.get("visualBrief") ?? ""), socialAccountId: String(formData.get("socialAccountId") ?? ""),
   });
-  const scheduledFor = optionalDate(formData.get("scheduledFor"));
+  const scheduledFor = parseCentralInput(formData.get("scheduledFor"));
   await prisma.$transaction(async (tx) => {
     const current = await tx.contentDraft.findUnique({ where: { id: draftId }, include: { brandAngle: true, socialAccount: true, publication: true } });
     if (!current) throw new Error("Content not found");
     const brand = await tx.brand.findFirst({ where: { id: input.brandId, active: true }, select: { id: true } });
     if (!brand) throw new Error("Choose an active canonical brand");
     if (input.socialAccountId) {
-      const account = await tx.socialAccount.findFirst({ where: { id: input.socialAccountId, brandId: input.brandId, connectionStatus: "CONNECTED" }, select: { id: true } });
-      if (!account) throw new Error("Choose a connected account owned by the selected brand");
+      const account = await tx.socialAccount.findUnique({ where: { id: input.socialAccountId } });
+      if (!account || !isSchedulableDestination(account, input.brandId)) throw new Error("Choose a connected or manually verified account owned by the selected brand");
     }
     const nextSubstantive = { brandId: input.brandId, objective: input.objective, hook: input.hook, rationale: input.rationale, body: input.body, visualBrief: input.visualBrief, callToAction: input.callToAction };
     const substantiveChange = hasSubstantiveContentChange({ brandId: current.brandAngle.brandId, objective: current.objective, hook: current.hook, rationale: current.rationale, body: current.body, visualBrief: current.visualBrief, callToAction: current.callToAction }, nextSubstantive);
@@ -336,7 +337,7 @@ export async function updateContentDraft(draftId: string, formData: FormData) {
     await tx.contentDraft.update({ where: { id: draftId }, data: { brandAngleId, objective: input.objective, hook: input.hook, rationale: input.rationale, body: input.body, visualBrief: input.visualBrief, callToAction: input.callToAction, socialAccountId: input.socialAccountId, scheduledFor: approvalInvalidated ? null : scheduledFor, status: nextStatus } });
     if (current.publication) {
       if (approvalInvalidated) await tx.publication.update({ where: { draftId }, data: { status: "CANCELLED", scheduledFor: null } });
-      else if (nextStatus === "READY" && input.socialAccountId && scheduledFor) await tx.publication.update({ where: { draftId }, data: { socialAccountId: input.socialAccountId, scheduledFor, status: "PLANNED" } });
+      else if (nextStatus === "READY" && input.socialAccountId && scheduledFor) await tx.publication.update({ where: { draftId }, data: { socialAccountId: input.socialAccountId, scheduledFor, status: current.publication.method === "MANUAL" ? "READY" : "PLANNED" } });
     }
     await tx.auditEvent.create({ data: { actorId: user.id, action: "content.edit", entityType: "ContentDraft", entityId: draftId, metadata: { substantiveChange, approvalInvalidated, previousStatus: current.status, nextStatus } } });
   });
@@ -362,14 +363,14 @@ export async function deleteContentDraft(draftId: string) {
 export async function scheduleDraft(draftId: string, formData: FormData) {
   const user = await requireEditor();
   const socialAccountId = text.parse(formData.get("socialAccountId"));
-  const scheduledFor = optionalDate(formData.get("scheduledFor"));
+  const scheduledFor = parseCentralInput(formData.get("scheduledFor"));
   if (!scheduledFor) throw new Error("A publish time is required");
   await prisma.$transaction(async (tx) => {
     const draft = await tx.contentDraft.findUnique({ where: { id: draftId }, include: { brandAngle: { select: { brandId: true } } } });
     if (!draft) throw new Error("Content not found");
     assertContentTransition(draft.status as ContentStatus, "READY");
-    const account = await tx.socialAccount.findFirst({ where: { id: socialAccountId, brandId: draft.brandAngle.brandId, connectionStatus: "CONNECTED" }, select: { id: true } });
-    if (!account) throw new Error("A connected social account for this brand is required");
+    const account = await tx.socialAccount.findUnique({ where: { id: socialAccountId } });
+    if (!account || !isSchedulableDestination(account, draft.brandAngle.brandId)) throw new Error("A connected or manually verified social account for this brand is required");
     await tx.contentDraft.update({ where: { id: draftId }, data: { status: "READY", socialAccountId, scheduledFor } });
     await tx.publication.upsert({ where: { draftId }, update: { socialAccountId, scheduledFor, status: "PLANNED" }, create: { draftId, socialAccountId, scheduledFor } });
     await tx.auditEvent.create({ data: { actorId: user.id, action: "content.schedule", entityType: "ContentDraft", entityId: draftId, metadata: { scheduledFor: scheduledFor.toISOString() } } });
