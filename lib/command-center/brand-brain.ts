@@ -230,6 +230,30 @@ export const fantasyTrackBrandBrain: BrandBrainFormValue = {
   aiOperatingInstructions: ["Treat player-versus-field competition as the defining consumer mechanic", "Make the position race easy to understand", "Treat the live leaderboard as a race only when trusted data supports it", "Use energetic, sports-native, race-oriented language", "Recognize long-shot leaders and lead changes as high-value opportunities only when trusted data supports them", "Use public-conviction and market data only when supplied", "Distinguish pre-race, live-race, and final-result states", "Never fabricate entries, odds, pool data, fantasy scores, leaders, payouts, ROI, or results", "Never invent product mechanics", "Distinguish the simple consumer race story from the B2B self-pricing-field story", "Use The field prices itself primarily for industry, partner, investor, and operator contexts", "Avoid generic fantasy-advice positioning", "Avoid reducing FantasyTrack to an isolated player-prop product", "Use responsible language around wagering, pricing, payouts, and risk", "Distinguish consumer messaging from creator, media, operator, partner, and investor outreach", "Create genuinely different editorial angles from RankEyeQ and Handicap Hero", "Remember: the players are the field; the game is the race"],
 };
 
+export const exactStatBrandBrain: BrandBrainFormValue = {
+  purpose: "Test whether predicting the exact number—an exact stat line rather than over/under or a ranking—creates a sharper, more satisfying form of sports prediction. ExactStat is in development; its job right now is to learn whether fans understand and enjoy the mechanic.",
+  corePromise: "Pick the exact number.",
+  coreProposition: "Most sports predictions ask which side or which player. ExactStat asks for the exact number: how many yards, points, strikeouts, or goals. Precision becomes the skill. The concept is still being validated through prototype tests, so every public statement must describe it as in development.",
+  audience: "Sports fans who already make numeric predictions—fantasy players, pick'em participants, and stat-focused fans—who would enjoy proving how precisely they read a game.",
+  secondaryAudiences: ["Fantasy football players", "Stat-focused sports fans", "Sports trivia and prediction enthusiasts", "Sports creators who discuss stat lines"],
+  distributionAudiences: ["Prototype test participants", "Sports creators interested in prediction formats", "Sports-tech collaborators (concept stage only)"],
+  jobsToBeDone: ["Let me test how precisely I can read a player or game", "Give me a prediction where being exactly right feels earned", "Show me clearly what number I am predicting and how closeness is judged", "Help the team learn whether the exact-number mechanic is understandable before anything launches"],
+  contentPillars: ["The Exact Number", "Precision as Skill", "Concept in Development", "What We Are Learning"],
+  voice: "Precise, curious, sports-smart, and candid. Speak like a builder testing a sharp idea, not a launched product chasing signups.",
+  voiceTraits: ["Precise", "Curious", "Sports-smart", "Candid", "Concise"],
+  communicationPatterns: ["Lead with a single concrete stat line and ask for the exact number", "Label concept and prototype material as in development", "Share what prototype tests taught us only when trusted results exist", "Explain how closeness would be judged only when the mechanic is defined in trusted context"],
+  contentModes: [
+    { name: "Concept Explainer", goal: "Make the exact-number mechanic understandable, clearly labeled as in development" },
+    { name: "Prototype Learning", goal: "Share a real lesson from prototype testing using trusted results only" },
+    { name: "Outreach", goal: "Invite qualified fans or creators into a prototype conversation without implying a launch" },
+    { name: "Do Not Post", goal: "Recommend no public content when there is no verified destination or trusted learning to share" },
+  ],
+  prohibitedContent: ["Live-money, wagering, pool, prize, payout, or odds claims", "Launch, availability, signup, or app-store claims", "Fabricated participants, picks, accuracy, results, or leaderboards", "Partner, league, team, sportsbook, or data-provider affiliation claims", "Legal or regulatory conclusions", "Presenting roadmap ideas as current functionality"],
+  factualRequirements: ["Describe ExactStat as in development unless trusted context establishes otherwise", "Use only verified destinations; never invent a URL or signup flow", "Use prototype results only from reviewed measurements or supplied evidence", "Distinguish concept, prototype, and launched states"],
+  affiliationRestrictions: ["Never imply any league, team, sportsbook, creator, media, or partner relationship without trusted context"],
+  aiOperatingInstructions: ["Treat ExactStat as a DEVELOPMENT-stage concept", "Prefer NEEDS_MORE_CONTEXT or Do Not Post over inventing an offer, destination, or result", "Never mention money, pools, prizes, or payouts", "Keep the mechanic simple: one stat, one exact number", "Create angles distinct from RankEyeQ, Handicap Hero, and FantasyTrack"],
+};
+
 export const eyezOnThePrizeBrandBrain: BrandBrainFormValue = {
   purpose: "Give consumer attention tangible value through a clear, transparent exchange: a participant completes the required sponsor experience, receives a legitimate verified entry, and can see the drawing and resulting winner.",
   corePromise: "Your Attention Is Worth Something.",

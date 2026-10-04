@@ -3,6 +3,7 @@ import { brandDefinitions } from "../lib/command-center/brand-definitions";
 import { eyezOnThePrizeBrandBrain, fantasyTrackBrandBrain, handicapHeroBrandBrain, rankEyeQBrandBrain, shouldInitializeBrandBrain, sngLabsBrandBrain, stadiumSlopBrandBrain, teamM8tesBrandBrain } from "../lib/command-center/brand-brain";
 import { campaignDefinitions, growthProgramDefinitions } from "../lib/command-center/campaign-definitions";
 import { seedSportsIdentityFoundation } from "../lib/sports/seed-foundation";
+import { initializeExactStat } from "../lib/growth/exactstat";
 
 const prisma = new PrismaClient();
 
@@ -277,6 +278,9 @@ async function main() {
   } else {
     console.log(`Preserved operator-managed Eyez on the Prize Brand Brain v${eyezOnThePrize.brandBrainVersion}.`);
   }
+
+  const exactStat = await initializeExactStat(prisma);
+  console.log(exactStat.performed.length ? `Initialized ExactStat: ${exactStat.performed.join(", ")}.` : "Preserved existing ExactStat brand, Brand Brain and Growth Briefs.");
 
   const brands = await prisma.brand.findMany();
   const brandIds = Object.fromEntries(brands.map((brand) => [brand.key, brand.id]));
