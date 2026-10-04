@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { signOut } from "@/auth";
-import { commandCenterNavigation } from "@/lib/command-center/navigation";
+import { commandCenterNavigationGroups } from "@/lib/command-center/navigation";
 
 type SidebarProps = {
   user: { name: string | null; email: string | null; role: string };
@@ -24,15 +24,20 @@ export function CommandCenterSidebar({ user }: SidebarProps) {
           </span>
         </div>
 
-        <nav className="flex gap-1 overflow-x-auto px-4 pb-4 lg:flex-1 lg:flex-col lg:overflow-visible lg:px-4 lg:pb-6" aria-label="Command Center">
-          {commandCenterNavigation.map((item) => (
-            <Link
-              key={item.key}
-              href={item.href}
-              className="whitespace-nowrap rounded-lg px-3 py-2.5 text-sm text-[#a5a8a6] transition hover:bg-white/[0.05] hover:text-white"
-            >
-              {item.label}
-            </Link>
+        <nav className="flex gap-1 overflow-x-auto px-4 pb-4 lg:flex-1 lg:flex-col lg:overflow-y-auto lg:px-4 lg:pb-6" aria-label="Command Center">
+          {commandCenterNavigationGroups.map((group) => (
+            <div key={group.label} className="flex gap-1 lg:mb-3 lg:flex-col">
+              <p className="hidden px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-[#5f6361] lg:block">{group.label}</p>
+              {group.items.map((item) => (
+                <Link
+                  key={item.key}
+                  href={item.href}
+                  className="whitespace-nowrap rounded-lg px-3 py-2 text-sm text-[#a5a8a6] transition hover:bg-white/[0.05] hover:text-white"
+                >
+                  {item.label}
+                </Link>
+              ))}
+            </div>
           ))}
         </nav>
 
