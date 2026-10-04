@@ -355,3 +355,32 @@ export async function updateGrowthActionAction(actionId: string, formData: FormD
     revalidatePath("/command-center/growth");
   });
 }
+
+// Relationships ----------------------------------------------------------
+
+export async function updateRelationshipOperatingAction(relationshipId: string, formData: FormData) {
+  await runFormAction(`/command-center/relationships/${relationshipId}`, async () => {
+    const user = await requireGrowthEditor();
+    const priority = z.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"]).nullable().parse(str(formData, "priority"));
+    const campaignIds = [...new Set(formData.getAll("campaignIds").map(String).filter(Boolean))];
+    await prisma.$transaction(async (tx) => {
+      const current = await tx.relationship.findUnique({ where: { id: relationshipId }, select: { id: true, campaignLinks: { select: { campaignId: true } } } });
+      if (!current) throw new Error("Relationship not found");
+      const existing = new Set(current.campaignLinks.map((link) => link.campaignId));
+      const keep = new Set(campaignIds);
+      await tx.relationship.update({ where: { id: relationshipId }, data: {
+        ownerId: str(formData, "ownerId"), fitReason: str(formData, "fitReason"), offer: str(formData, "offer"), audience: str(formData, "audience"),
+        priority, priorityEvidence: str(formData, "priorityEvidence"), nextAction: str(formData, "nextAction"), nextFollowUpAt: parseCentralInput(formData.get("nextFollowUpAt")),
+        commitment: str(formData, "commitment"), outcome: str(formData, "outcome"),
+      } });
+      const removed = [...existing].filter((id) => !keep.has(id));
+      const added = campaignIds.filter((id) => !existing.has(id));
+      if (removed.length) await tx.relationshipCampaign.deleteMany({ where: { relationshipId, campaignId: { in: removed } } });
+      if (added.length) await tx.relationshipCampaign.createMany({ data: added.map((campaignId) => ({ relationshipId, campaignId, source: "OPERATOR" })), skipDuplicates: true });
+      await tx.auditEvent.create({ data: { actorId: user.id, action: "relationship.operating.update", entityType: "Relationship", entityId: relationshipId, metadata: { campaignsAdded: added.length, campaignsRemoved: removed.length, priority } } });
+    });
+    revalidatePath(`/command-center/relationships/${relationshipId}`);
+    revalidatePath("/command-center/relationships");
+    revalidatePath("/command-center");
+  });
+}
