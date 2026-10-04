@@ -9,6 +9,10 @@ import { mergeActivationContext } from "@/lib/command-center/campaign-workflow";
 import { parseContentModes, parseLines } from "@/lib/command-center/brand-brain";
 import { prisma } from "@/lib/prisma";
 import { writeSocialAuditEvent } from "@/lib/social-accounts/audit";
+import { assertActiveCampaignContract, changedMaterialFields, isValidDestinationUrl, parseMoneyToMinor, parseNonNegativeInteger, requiresActiveContract, type CampaignContractInput, type MaterialSnapshot } from "@/lib/growth/campaign-contract";
+import { runFormAction, runFormStateAction } from "@/lib/growth/form-action";
+import type { FormActionState } from "@/lib/growth/form-state";
+import { calendarDayKey, parseCentralInput } from "@/lib/growth/time";
 
 const text = z.string().trim().min(1).max(500);
 const optionalText = z.string().trim().max(5000).optional().transform((value) => value || null);
@@ -56,21 +60,47 @@ export async function createTeam(formData: FormData) {
   revalidatePath("/command-center/markets");
 }
 
-export async function createCampaign(formData: FormData) {
-  const user = await requireEditor();
-  const input = z.object({ name: text, programId: optionalText, description: optionalText, objective: optionalText, objectiveType: z.enum(["USER_ACQUISITION", "PARTICIPATION", "RETENTION", "BRAND_AWARENESS", "CREATOR_ACTIVATION", "MEDIA_EARNED", "PARTNERSHIP", "INDUSTRY_OUTREACH", "PRODUCT_VALIDATION", "OTHER"]), primaryAudience: optionalText, primaryCta: optionalText, coreMessage: optionalText, sport: optionalText, season: optionalText, notes: optionalText, successDefinition: optionalText, status: z.enum(["PLANNING", "ACTIVE", "PAUSED", "COMPLETE", "ARCHIVED"]) }).parse({
+function campaignInput(formData: FormData) {
+  const base = z.object({ name: text, programId: optionalText, description: optionalText, objective: optionalText, objectiveType: z.enum(["USER_ACQUISITION", "PARTICIPATION", "RETENTION", "BRAND_AWARENESS", "CREATOR_ACTIVATION", "MEDIA_EARNED", "PARTNERSHIP", "INDUSTRY_OUTREACH", "PRODUCT_VALIDATION", "OTHER"]), primaryAudience: optionalText, primaryCta: optionalText, coreMessage: optionalText, sport: optionalText, season: optionalText, notes: optionalText, successDefinition: optionalText, status: z.enum(["PLANNING", "ACTIVE", "PAUSED", "COMPLETE", "ARCHIVED"]), ownerId: optionalText, offer: optionalText, hypothesis: optionalText, destinationUrl: optionalText, executionPlan: optionalText, currency: z.string().trim().max(3).optional().transform((value) => value?.toUpperCase() || null) }).parse({
     name: formData.get("name"), programId: String(formData.get("programId") ?? ""), description: String(formData.get("description") ?? ""), objective: String(formData.get("objective") ?? ""), objectiveType: formData.get("objectiveType"), primaryAudience: String(formData.get("primaryAudience") ?? ""), primaryCta: String(formData.get("primaryCta") ?? ""), coreMessage: String(formData.get("coreMessage") ?? ""), sport: String(formData.get("sport") ?? ""), season: String(formData.get("season") ?? ""), notes: String(formData.get("notes") ?? ""), successDefinition: String(formData.get("successDefinition") ?? ""), status: formData.get("status"),
+    ownerId: String(formData.get("ownerId") ?? ""), offer: String(formData.get("offer") ?? ""), hypothesis: String(formData.get("hypothesis") ?? ""), destinationUrl: String(formData.get("destinationUrl") ?? ""), executionPlan: String(formData.get("executionPlan") ?? ""), currency: String(formData.get("currency") ?? ""),
   });
-  const campaign = await prisma.campaign.create({ data: {
-    ...input, active: input.status !== "ARCHIVED", kpis: lines(formData, "kpis"),
-    startsAt: optionalDate(formData.get("startsAt")), endsAt: optionalDate(formData.get("endsAt")),
-    brands: { connect: ids(formData, "brandIds").map((id) => ({ id })) },
-    markets: { connect: ids(formData, "marketIds").map((id) => ({ id })) },
-    teams: { connect: ids(formData, "teamIds").map((id) => ({ id })) },
-  } });
-  await audit(user.id, "campaign.create", "Campaign", campaign.id);
-  revalidatePath("/command-center/campaigns");
-  redirect(`/command-center/campaigns/${campaign.id}`);
+  if (base.destinationUrl && !isValidDestinationUrl(base.destinationUrl)) throw new Error("Destination URL must be a valid http(s) address");
+  if (base.currency && !/^[A-Z]{3}$/.test(base.currency)) throw new Error("Currency must be a three-letter ISO code such as USD");
+  return {
+    ...base,
+    expectedMinutes: parseNonNegativeInteger(formData.get("expectedMinutes"), "Expected minutes"),
+    plannedSpendMinor: parseMoneyToMinor(formData.get("plannedSpend"), "Planned spend"),
+    actualSpendMinor: parseMoneyToMinor(formData.get("actualSpend"), "Actual spend"),
+    startsAt: parseCentralInput(formData.get("startsAt")),
+    endsAt: parseCentralInput(formData.get("endsAt")),
+    brandIds: ids(formData, "brandIds"),
+  };
+}
+
+function contractInput(campaign: { ownerId: string | null; objective: string | null; primaryAudience: string | null; offer: string | null; hypothesis: string | null; primaryCta: string | null; destinationUrl: string | null; executionPlan: string | null; startsAt: Date | null; endsAt: Date | null }, brandIds: string[], targetCount: number): CampaignContractInput {
+  return { ownerId: campaign.ownerId, brandIds, objective: campaign.objective, primaryAudience: campaign.primaryAudience, offer: campaign.offer, hypothesis: campaign.hypothesis, primaryCta: campaign.primaryCta, destinationUrl: campaign.destinationUrl, executionPlan: campaign.executionPlan, startsAt: campaign.startsAt, endsAt: campaign.endsAt, targetCount };
+}
+
+function materialSnapshot(campaign: Parameters<typeof contractInput>[0] & { objectiveType: string }, brandIds: string[]): MaterialSnapshot {
+  return { ownerId: campaign.ownerId, objective: campaign.objective, objectiveType: campaign.objectiveType, primaryAudience: campaign.primaryAudience, offer: campaign.offer, hypothesis: campaign.hypothesis, primaryCta: campaign.primaryCta, destinationUrl: campaign.destinationUrl, executionPlan: campaign.executionPlan, startsAt: calendarDayKey(campaign.startsAt), endsAt: calendarDayKey(campaign.endsAt), brandIds };
+}
+
+export async function createCampaign(previous: FormActionState, formData: FormData) {
+  return runFormStateAction(previous, formData, async () => {
+    const user = await requireEditor();
+    const { brandIds, ...input } = campaignInput(formData);
+    if (requiresActiveContract(null, input.status, false)) assertActiveCampaignContract(contractInput(input, brandIds, 0));
+    const campaign = await prisma.campaign.create({ data: {
+      ...input, active: input.status !== "ARCHIVED", kpis: lines(formData, "kpis"),
+      brands: { connect: brandIds.map((id) => ({ id })) },
+      markets: { connect: ids(formData, "marketIds").map((id) => ({ id })) },
+      teams: { connect: ids(formData, "teamIds").map((id) => ({ id })) },
+    } });
+    await audit(user.id, "campaign.create", "Campaign", campaign.id, { status: input.status });
+    revalidatePath("/command-center/campaigns");
+    return { redirectTo: `/command-center/campaigns/${campaign.id}` };
+  });
 }
 
 export async function createOpportunity(formData: FormData) {
@@ -391,25 +421,38 @@ export async function updateRelationshipStage(relationshipId: string, formData: 
 }
 
 export async function updateCampaignStatus(campaignId: string, formData: FormData) {
-  const user = await requireEditor();
-  const status = z.enum(["PLANNING", "ACTIVE", "PAUSED", "COMPLETE", "ARCHIVED"]).parse(formData.get("status"));
-  await prisma.campaign.update({ where: { id: campaignId }, data: { status, active: status !== "ARCHIVED" } });
-  await audit(user.id, "campaign.status", "Campaign", campaignId);
-  revalidatePath("/command-center/campaigns");
-  revalidatePath(`/command-center/campaigns/${campaignId}`);
-  revalidatePath("/command-center");
+  await runFormAction(`/command-center/campaigns/${campaignId}`, async () => {
+    const user = await requireEditor();
+    const status = z.enum(["PLANNING", "ACTIVE", "PAUSED", "COMPLETE", "ARCHIVED"]).parse(formData.get("status"));
+    await prisma.$transaction(async (tx) => {
+      const current = await tx.campaign.findUnique({ where: { id: campaignId }, include: { brands: { select: { id: true } }, _count: { select: { targets: true } } } });
+      if (!current) throw new Error("Campaign not found");
+      if (requiresActiveContract(current.status, status, false)) assertActiveCampaignContract(contractInput(current, current.brands.map((brand) => brand.id), current._count.targets));
+      await tx.campaign.update({ where: { id: campaignId }, data: { status, active: status !== "ARCHIVED" } });
+      await tx.auditEvent.create({ data: { actorId: user.id, action: "campaign.status", entityType: "Campaign", entityId: campaignId, metadata: { previousStatus: current.status, status } } });
+    }, { isolationLevel: "Serializable" });
+    revalidatePath("/command-center/campaigns");
+    revalidatePath(`/command-center/campaigns/${campaignId}`);
+    revalidatePath("/command-center");
+  });
 }
 
-export async function updateCampaign(campaignId: string, formData: FormData) {
-  const user = await requireEditor();
-  const input = z.object({ name: text, programId: optionalText, description: optionalText, objective: optionalText, objectiveType: z.enum(["USER_ACQUISITION", "PARTICIPATION", "RETENTION", "BRAND_AWARENESS", "CREATOR_ACTIVATION", "MEDIA_EARNED", "PARTNERSHIP", "INDUSTRY_OUTREACH", "PRODUCT_VALIDATION", "OTHER"]), primaryAudience: optionalText, primaryCta: optionalText, coreMessage: optionalText, sport: optionalText, season: optionalText, notes: optionalText, successDefinition: optionalText, status: z.enum(["PLANNING", "ACTIVE", "PAUSED", "COMPLETE", "ARCHIVED"]) }).parse({
-    name: formData.get("name"), programId: String(formData.get("programId") ?? ""), description: String(formData.get("description") ?? ""), objective: String(formData.get("objective") ?? ""), objectiveType: formData.get("objectiveType"), primaryAudience: String(formData.get("primaryAudience") ?? ""), primaryCta: String(formData.get("primaryCta") ?? ""), coreMessage: String(formData.get("coreMessage") ?? ""), sport: String(formData.get("sport") ?? ""), season: String(formData.get("season") ?? ""), notes: String(formData.get("notes") ?? ""), successDefinition: String(formData.get("successDefinition") ?? ""), status: formData.get("status"),
+export async function updateCampaign(campaignId: string, previous: FormActionState, formData: FormData) {
+  return runFormStateAction(previous, formData, async () => {
+    const user = await requireEditor();
+    const { brandIds, ...input } = campaignInput(formData);
+    await prisma.$transaction(async (tx) => {
+      const current = await tx.campaign.findUnique({ where: { id: campaignId }, include: { brands: { select: { id: true } }, _count: { select: { targets: true } } } });
+      if (!current) throw new Error("Campaign not found");
+      const changed = changedMaterialFields(materialSnapshot(current, current.brands.map((brand) => brand.id)), materialSnapshot(input, brandIds));
+      if (requiresActiveContract(current.status, input.status, changed.length > 0)) assertActiveCampaignContract(contractInput(input, brandIds, current._count.targets));
+      await tx.campaign.update({ where: { id: campaignId }, data: { ...input, active: input.status !== "ARCHIVED", kpis: lines(formData, "kpis"), brands: { set: brandIds.map((id) => ({ id })) }, markets: { set: ids(formData, "marketIds").map((id) => ({ id })) }, teams: { set: ids(formData, "teamIds").map((id) => ({ id })) } } });
+      await tx.auditEvent.create({ data: { actorId: user.id, action: "campaign.edit", entityType: "Campaign", entityId: campaignId, metadata: { previousStatus: current.status, status: input.status, materialFields: changed.join(",") } } });
+    }, { isolationLevel: "Serializable" });
+    revalidatePath("/command-center/campaigns");
+    revalidatePath(`/command-center/campaigns/${campaignId}`);
+    return { redirectTo: `/command-center/campaigns/${campaignId}` };
   });
-  await prisma.campaign.update({ where: { id: campaignId }, data: { ...input, active: input.status !== "ARCHIVED", startsAt: optionalDate(formData.get("startsAt")), endsAt: optionalDate(formData.get("endsAt")), kpis: lines(formData, "kpis"), brands: { set: ids(formData, "brandIds").map((id) => ({ id })) }, markets: { set: ids(formData, "marketIds").map((id) => ({ id })) }, teams: { set: ids(formData, "teamIds").map((id) => ({ id })) } } });
-  await audit(user.id, "campaign.edit", "Campaign", campaignId);
-  revalidatePath("/command-center/campaigns");
-  revalidatePath(`/command-center/campaigns/${campaignId}`);
-  redirect(`/command-center/campaigns/${campaignId}`);
 }
 
 export async function createActivation(campaignId: string, formData: FormData) {
