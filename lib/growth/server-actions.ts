@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireCommandCenterUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
+import { writeSocialAuditEvent } from "@/lib/social-accounts/audit";
 import { completedAtFor, validateGrowthAction, type GrowthActionStatus } from "./actions-rules";
 import { growthStages, type BriefContent } from "./briefs";
 import { runFormAction } from "./form-action";
@@ -13,6 +14,8 @@ import { inclusiveEndToExclusive, metricAggregations, metricUnits, funnelStages,
 import { recordMeasurementTx } from "./measurement-store";
 import { assertCanAllocatePortfolio, assertCanEditGrowth } from "./permissions";
 import { parseWeeklyHours, portfolioAllocations } from "./priorities";
+import { validateProfileUrl, type SocialPlatform } from "./manual-publication";
+import { confirmManualPublicationTx, prepareManualHandoffTx } from "./publication-store";
 import { approveGrowthBrief, archiveGrowthBrief, createGrowthBriefDraft, setPortfolioPriority, updateGrowthBriefDraft } from "./strategy-store";
 import { parseCentralInput } from "./time";
 
@@ -382,5 +385,53 @@ export async function updateRelationshipOperatingAction(relationshipId: string, 
     revalidatePath(`/command-center/relationships/${relationshipId}`);
     revalidatePath("/command-center/relationships");
     revalidatePath("/command-center");
+  });
+}
+
+// Manual publishing ------------------------------------------------------
+
+export async function verifyDestinationIdentityAction(accountId: string, formData: FormData) {
+  const account = await prisma.socialAccount.findUnique({ where: { id: accountId }, select: { brandId: true, platform: true } });
+  const returnTo = safeReturnTo(formData, account ? `/command-center/brands/${account.brandId}` : "/command-center/settings/integrations");
+  await runFormAction(returnTo, async () => {
+    const user = await requireGrowthEditor();
+    if (!account) throw new Error("Account not found");
+    const submittedProfileUrl = str(formData, "profileUrl");
+    const handle = str(formData, "handle");
+    const source = required(formData, "verificationSource", "Verification source");
+    if (!submittedProfileUrl && !handle) throw new Error("A verified profile URL or handle is required");
+    const profileUrl = submittedProfileUrl ? validateProfileUrl(account.platform as SocialPlatform, submittedProfileUrl) : null;
+    const verifiedAt = parseCentralInput(formData.get("verifiedAt")) ?? new Date();
+    if (verifiedAt.getTime() > Date.now() + 5 * 60_000) throw new Error("Verification time cannot be in the future");
+    await prisma.$transaction(async (tx) => {
+      await tx.socialAccount.update({ where: { id: accountId }, data: { profileUrl: profileUrl ?? undefined, handle: handle ?? undefined, metadataVerifiedAt: verifiedAt } });
+      await writeSocialAuditEvent(tx, { actorId: user.id, action: "social_account.identity.verify", entityType: "SocialAccount", entityId: accountId, metadata: { method: "MANUAL", source, verifiedAt: verifiedAt.toISOString(), hasProfileUrl: Boolean(profileUrl), hasHandle: Boolean(handle) } });
+    });
+    revalidatePath(returnTo);
+    revalidatePath("/command-center/queue");
+    return { saved: "verified" };
+  });
+}
+
+export async function prepareManualHandoffAction(draftId: string, formData: FormData) {
+  await runFormAction(`/command-center/queue/${draftId}/publish`, async () => {
+    const user = await requireGrowthEditor();
+    await prepareManualHandoffTx(prisma, { draftId, socialAccountId: required(formData, "socialAccountId", "Destination"), plannedFor: parseCentralInput(formData.get("plannedFor")), actorId: user.id });
+    revalidatePath("/command-center/queue");
+    revalidatePath("/command-center");
+    return { saved: "handoff" };
+  });
+}
+
+export async function confirmManualPublicationAction(draftId: string, formData: FormData) {
+  await runFormAction(`/command-center/queue/${draftId}/publish`, async () => {
+    const user = await requireGrowthEditor();
+    const result = await confirmManualPublicationTx(prisma, {
+      draftId, platformUrl: required(formData, "platformUrl", "Published URL"), publishedAt: parseCentralInput(formData.get("publishedAt")),
+      platformPostId: str(formData, "platformPostId"), confirmationNote: str(formData, "confirmationNote"), actorId: user.id,
+    });
+    revalidatePath("/command-center/queue");
+    revalidatePath("/command-center");
+    return { saved: result.outcome === "PUBLISHED" ? "published" : "already-recorded" };
   });
 }
