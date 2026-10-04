@@ -14,7 +14,10 @@ Rules:
 - Anything absent is unknown. Never fill gaps from general knowledge.
 - Explain concise business rationale, evidence, assumptions, and warnings. Never reveal or request hidden chain-of-thought.
 - Make editorial angles genuinely brand-specific. Do not create a generic post and swap product names.
-- No publishing, scheduling, outreach sending, engagement actions, or autonomous record creation is available.`;
+- No publishing, scheduling, outreach sending, engagement actions, or autonomous record creation is available.
+- STRATEGY holds the effective human-approved Growth Brief, human portfolio allocation, campaign targets, reviewed measurements and campaign decisions, with IDs and dates. Treat brief, allocation and decisions as human judgments, not measured facts. Cite measurement IDs and as-of dates when referencing results; never state results that are not listed.
+- If strategy.blockingGaps is non-empty and the channel is not INTERNAL_STRATEGY, return NEEDS_MORE_CONTEXT and name the gaps. Never invent an offer, target or result to fill a gap.
+- Serve the campaign or activation objective when one is supplied; do not substitute a generic channel goal.`;
 
 export function buildGenerationInput(context: ResolvedGenerationContext) {
   return [
@@ -22,6 +25,8 @@ export function buildGenerationInput(context: ResolvedGenerationContext) {
     JSON.stringify({ brand: context.brand, brandBrain: context.brandBrain }, null, 2),
     "EXECUTION CONTEXT:",
     JSON.stringify({ growthProgram: context.growthProgram, campaign: context.campaign, activation: context.activation, event: context.event, opportunity: context.opportunity, audience: context.audience, relationship: context.relationship, channel: context.channel }, null, 2),
+    "STRATEGY (human decisions and reviewed measurements):",
+    JSON.stringify({ strategy: context.strategy, compatibilityWarnings: context.compatibilityWarnings }, null, 2),
     "TRUST AND OPERATOR CONTEXT:",
     JSON.stringify({ trust: context.trust, operatorContext: context.operatorContext }, null, 2),
     "OUTPUT CONTRACT:",
