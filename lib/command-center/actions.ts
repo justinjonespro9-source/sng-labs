@@ -125,30 +125,36 @@ export async function createOpportunity(formData: FormData) {
 }
 
 export async function createOrganization(formData: FormData) {
-  const user = await requireEditor();
-  const input = z.object({ name: text, type: z.enum(["MEDIA", "TEAM", "CREATOR_NETWORK", "CREATOR", "PODCAST", "VENUE", "PARTNER", "AGENCY", "INVESTOR", "OTHER"]), marketId: optionalText, websiteUrl: optionalText, notes: optionalText }).parse({
-    name: formData.get("name"), type: formData.get("type"), marketId: formData.get("marketId"), websiteUrl: formData.get("websiteUrl"), notes: formData.get("notes"),
+  await runFormAction("/command-center/relationships", async () => {
+    const user = await requireEditor();
+    const input = z.object({ name: text, type: z.enum(["MEDIA", "TEAM", "CREATOR_NETWORK", "CREATOR", "PODCAST", "VENUE", "PARTNER", "AGENCY", "INVESTOR", "OTHER"]), marketId: optionalText, websiteUrl: optionalText, notes: optionalText }).parse({
+      name: formData.get("name"), type: formData.get("type"), marketId: formData.get("marketId"), websiteUrl: formData.get("websiteUrl"), notes: formData.get("notes"),
+    });
+    const organization = await prisma.organization.create({ data: {
+      ...input, relevantBrands: { connect: ids(formData, "brandIds").map((id) => ({ id })) },
+    } });
+    await audit(user.id, "organization.create", "Organization", organization.id);
+    revalidatePath("/command-center/relationships");
+    return { saved: "organization" };
   });
-  const organization = await prisma.organization.create({ data: {
-    ...input, relevantBrands: { connect: ids(formData, "brandIds").map((id) => ({ id })) },
-  } });
-  await audit(user.id, "organization.create", "Organization", organization.id);
-  revalidatePath("/command-center/relationships");
 }
 
 export async function createRelationship(formData: FormData) {
-  const user = await requireEditor();
-  const input = z.object({ name: text, organizationId: text, contactName: z.string().trim().max(200).optional(), contactTitle: z.string().trim().max(200).optional(), summary: optionalText }).parse({
-    name: formData.get("name"), organizationId: formData.get("organizationId"), contactName: String(formData.get("contactName") ?? ""), contactTitle: String(formData.get("contactTitle") ?? ""), summary: formData.get("summary"),
+  await runFormAction("/command-center/relationships", async () => {
+    const user = await requireEditor();
+    const input = z.object({ name: text, organizationId: text, contactName: z.string().trim().max(200).optional(), contactTitle: z.string().trim().max(200).optional(), summary: optionalText }).parse({
+      name: formData.get("name"), organizationId: formData.get("organizationId"), contactName: String(formData.get("contactName") ?? ""), contactTitle: String(formData.get("contactTitle") ?? ""), summary: formData.get("summary"),
+    });
+    const contact = input.contactName ? await prisma.contact.create({ data: { name: input.contactName, title: input.contactTitle || null, organizationId: input.organizationId } }) : null;
+    const relationship = await prisma.relationship.create({ data: {
+      name: input.name, organizationId: input.organizationId, contactId: contact?.id, ownerId: user.id, summary: input.summary,
+      nextFollowUpAt: parseCentralInput(formData.get("nextFollowUpAt")),
+      relevantBrands: { connect: ids(formData, "brandIds").map((id) => ({ id })) },
+    } });
+    await audit(user.id, "relationship.create", "Relationship", relationship.id);
+    revalidatePath("/command-center/relationships");
+    return { redirectTo: `/command-center/relationships/${relationship.id}`, saved: "relationship" };
   });
-  const contact = input.contactName ? await prisma.contact.create({ data: { name: input.contactName, title: input.contactTitle || null, organizationId: input.organizationId } }) : null;
-  const relationship = await prisma.relationship.create({ data: {
-    name: input.name, organizationId: input.organizationId, contactId: contact?.id, ownerId: user.id, summary: input.summary,
-    nextFollowUpAt: optionalDate(formData.get("nextFollowUpAt")),
-    relevantBrands: { connect: ids(formData, "brandIds").map((id) => ({ id })) },
-  } });
-  await audit(user.id, "relationship.create", "Relationship", relationship.id);
-  revalidatePath("/command-center/relationships");
 }
 
 export async function updateBrandProfile(brandId: string, formData: FormData) {
@@ -387,37 +393,46 @@ export async function unscheduleDraft(draftId: string) {
 }
 
 export async function addRelationshipActivity(relationshipId: string, formData: FormData) {
-  const user = await requireEditor();
-  const type = z.enum(["EMAIL", "DM", "CALL", "MEETING", "NOTE", "FOLLOW_UP", "OTHER"]).parse(formData.get("type"));
-  const summary = z.string().trim().min(1).max(5000).parse(formData.get("summary"));
-  const nextStep = String(formData.get("nextStep") || "").trim() || null;
-  let campaignId = String(formData.get("campaignId") || "").trim() || null;
-  const activationId = String(formData.get("activationId") || "").trim() || null;
-  const executionType = z.enum(["ORGANIC_SOCIAL", "CREATOR_OUTREACH", "MEDIA_OUTREACH", "COMMUNITY", "PARTNERSHIP", "PAID", "PRODUCT_EVENT", "OTHER"]).optional().parse(String(formData.get("executionType") || "").trim() || undefined);
-  const occurredAt = optionalDate(formData.get("occurredAt")) ?? new Date();
-  if (activationId) {
-    const activation = await prisma.campaignActivation.findUnique({ where: { id: activationId }, select: { campaignId: true } });
-    if (!activation) throw new Error("Activation not found");
-    if (campaignId && campaignId !== activation.campaignId) throw new Error("Activation does not belong to the selected campaign");
-    campaignId = activation.campaignId;
-  }
-  await prisma.$transaction([
-    prisma.relationshipActivity.create({ data: { relationshipId, type, summary, nextStep, occurredAt, campaignId, activationId, executionType } }),
-    prisma.relationship.update({ where: { id: relationshipId }, data: { lastOutreachAt: type === "NOTE" ? undefined : occurredAt, nextFollowUpAt: optionalDate(formData.get("nextFollowUpAt")) } }),
-    ...(activationId ? [prisma.campaignActivation.update({ where: { id: activationId }, data: { relationships: { connect: { id: relationshipId } } } })] : []),
-  ]);
-  await audit(user.id, "relationship.activity", "Relationship", relationshipId);
-  revalidatePath(`/command-center/relationships/${relationshipId}`);
-  revalidatePath("/command-center/relationships");
+  await runFormAction(`/command-center/relationships/${relationshipId}`, async () => {
+    const user = await requireEditor();
+    const type = z.enum(["EMAIL", "DM", "CALL", "MEETING", "NOTE", "FOLLOW_UP", "OTHER"]).parse(formData.get("type"));
+    const summary = z.string().trim().min(1).max(5000).parse(formData.get("summary"));
+    const nextStep = String(formData.get("nextStep") || "").trim() || null;
+    let campaignId = String(formData.get("campaignId") || "").trim() || null;
+    const activationId = String(formData.get("activationId") || "").trim() || null;
+    const executionType = z.enum(["ORGANIC_SOCIAL", "CREATOR_OUTREACH", "MEDIA_OUTREACH", "COMMUNITY", "PARTNERSHIP", "PAID", "PRODUCT_EVENT", "OTHER"]).optional().parse(String(formData.get("executionType") || "").trim() || undefined);
+    const direction = z.enum(["INBOUND", "OUTBOUND", "INTERNAL"]).parse(formData.get("direction") || (type === "NOTE" ? "INTERNAL" : "OUTBOUND"));
+    const occurredAt = parseCentralInput(formData.get("occurredAt")) ?? new Date();
+    const nextFollowUpAt = parseCentralInput(formData.get("nextFollowUpAt"));
+    const nextAction = String(formData.get("nextAction") || "").trim() || null;
+    if (activationId) {
+      const activation = await prisma.campaignActivation.findUnique({ where: { id: activationId }, select: { campaignId: true } });
+      if (!activation) throw new Error("Activation not found");
+      if (campaignId && campaignId !== activation.campaignId) throw new Error("Activation does not belong to the selected campaign");
+      campaignId = activation.campaignId;
+    }
+    await prisma.$transaction([
+      prisma.relationshipActivity.create({ data: { relationshipId, type, direction, summary, nextStep, occurredAt, campaignId, activationId, executionType } }),
+      prisma.relationship.update({ where: { id: relationshipId }, data: { lastOutreachAt: direction === "OUTBOUND" && type !== "NOTE" ? occurredAt : undefined, nextFollowUpAt: nextFollowUpAt ?? undefined, nextAction: nextAction ?? undefined } }),
+      ...(campaignId ? [prisma.relationshipCampaign.upsert({ where: { relationshipId_campaignId: { relationshipId, campaignId } }, update: {}, create: { relationshipId, campaignId, source: "ACTIVITY" } })] : []),
+      ...(activationId ? [prisma.campaignActivation.update({ where: { id: activationId }, data: { relationships: { connect: { id: relationshipId } } } })] : []),
+    ]);
+    await audit(user.id, "relationship.activity", "Relationship", relationshipId, { direction });
+    revalidatePath(`/command-center/relationships/${relationshipId}`);
+    revalidatePath("/command-center/relationships");
+    return { saved: "activity" };
+  });
 }
 
 export async function updateRelationshipStage(relationshipId: string, formData: FormData) {
-  const user = await requireEditor();
-  const stage = z.enum(["PROSPECT", "CONTACTED", "CONVERSATION", "OPPORTUNITY", "PARTNER", "CLOSED", "NOT_PURSUING"]).parse(formData.get("stage"));
-  await prisma.relationship.update({ where: { id: relationshipId }, data: { stage } });
-  await audit(user.id, "relationship.stage", "Relationship", relationshipId);
-  revalidatePath("/command-center/relationships");
-  revalidatePath(`/command-center/relationships/${relationshipId}`);
+  await runFormAction(`/command-center/relationships/${relationshipId}`, async () => {
+    const user = await requireEditor();
+    const stage = z.enum(["PROSPECT", "CONTACTED", "CONVERSATION", "OPPORTUNITY", "PARTNER", "CLOSED", "NOT_PURSUING"]).parse(formData.get("stage"));
+    await prisma.relationship.update({ where: { id: relationshipId }, data: { stage } });
+    await audit(user.id, "relationship.stage", "Relationship", relationshipId);
+    revalidatePath("/command-center/relationships");
+    revalidatePath(`/command-center/relationships/${relationshipId}`);
+  });
 }
 
 export async function updateCampaignStatus(campaignId: string, formData: FormData) {
