@@ -1,6 +1,8 @@
 import { z } from "zod";
 
-export const AI_LAB_GENERATION_VERSION = "ai-lab-v1";
+export const AI_LAB_GENERATION_VERSION = "ai-lab-v2";
+/** Historical runs keep their version; every listed version shares generatedExecutionSchema. */
+export const AI_LAB_SUPPORTED_GENERATION_VERSIONS = ["ai-lab-v1", "ai-lab-v2"] as const;
 
 export const aiLabChannels = [
   "X",
