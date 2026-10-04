@@ -1,5 +1,6 @@
 "use server";
 
+import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireCommandCenterUser } from "@/lib/auth/session";
@@ -8,6 +9,8 @@ import { completedAtFor, validateGrowthAction, type GrowthActionStatus } from ".
 import { growthStages, type BriefContent } from "./briefs";
 import { runFormAction } from "./form-action";
 import { safeReturnTo } from "./form-state";
+import { inclusiveEndToExclusive, metricAggregations, metricUnits, funnelStages, validateCampaignTarget, validateMetricDefinition } from "./measurements";
+import { recordMeasurementTx } from "./measurement-store";
 import { assertCanAllocatePortfolio, assertCanEditGrowth } from "./permissions";
 import { parseWeeklyHours, portfolioAllocations } from "./priorities";
 import { approveGrowthBrief, archiveGrowthBrief, createGrowthBriefDraft, setPortfolioPriority, updateGrowthBriefDraft } from "./strategy-store";
@@ -28,6 +31,10 @@ function required(formData: FormData, key: string, label: string) {
   const value = str(formData, key);
   if (!value) throw new Error(`${label} is required`);
   return value;
+}
+
+function lines(formData: FormData, key: string) {
+  return String(formData.get(key) ?? "").split("\n").map((value) => value.trim()).filter(Boolean);
 }
 
 function optionalInt(formData: FormData, key: string, label: string) {
@@ -135,6 +142,175 @@ export async function setPortfolioPriorityAction(brandId: string, formData: Form
     });
     revalidateGrowth(brandId);
     return { saved: "priority" };
+  });
+}
+
+// Measurement ------------------------------------------------------------
+
+function definitionDraft(formData: FormData) {
+  const draft = {
+    key: required(formData, "key", "Key").toLowerCase(),
+    label: required(formData, "label", "Label"),
+    unit: z.enum(metricUnits).parse(formData.get("unit")),
+    aggregation: z.enum(metricAggregations).parse(formData.get("aggregation")),
+    definition: required(formData, "definition", "Definition"),
+    numeratorDefinition: str(formData, "numeratorDefinition"),
+    denominatorDefinition: str(formData, "denominatorDefinition"),
+    cohortBasis: str(formData, "cohortBasis"),
+    freshnessDays: optionalInt(formData, "freshnessDays", "Freshness"),
+  };
+  validateMetricDefinition(draft);
+  return draft;
+}
+
+export async function createMetricDefinitionAction(formData: FormData) {
+  await runFormAction(safeReturnTo(formData, "/command-center/scorecards"), async () => {
+    const user = await requireGrowthEditor();
+    const brandId = required(formData, "brandId", "Brand");
+    const draft = definitionDraft(formData);
+    const funnelStage = z.enum(funnelStages).parse(formData.get("funnelStage"));
+    const existing = await prisma.growthMetricDefinition.findFirst({ where: { brandId, key: draft.key }, select: { id: true } });
+    if (existing) throw new Error("A definition with this key already exists for the brand. Create a new version instead of redefining it.");
+    const definition = await prisma.growthMetricDefinition.create({ data: { ...draft, brandId, funnelStage, version: 1, effectiveAt: parseCentralInput(formData.get("effectiveAt")) ?? new Date(), status: "DRAFT", createdById: user.id } });
+    await prisma.auditEvent.create({ data: { actorId: user.id, action: "growth_metric_definition.create", entityType: "GrowthMetricDefinition", entityId: definition.id, metadata: { brandId, key: draft.key, version: 1 } } });
+    revalidatePath("/command-center/scorecards");
+    return { saved: "definition" };
+  });
+}
+
+export async function createMetricDefinitionVersionAction(definitionId: string, formData: FormData) {
+  await runFormAction(safeReturnTo(formData, "/command-center/scorecards"), async () => {
+    const user = await requireGrowthEditor();
+    const draft = definitionDraft(formData);
+    const funnelStage = z.enum(funnelStages).parse(formData.get("funnelStage"));
+    await prisma.$transaction(async (tx) => {
+      const previous = await tx.growthMetricDefinition.findUnique({ where: { id: definitionId }, include: { supersededBy: { select: { id: true } } } });
+      if (!previous) throw new Error("Metric definition not found");
+      if (previous.supersededBy) throw new Error("A newer version already exists; version from the latest definition");
+      if (draft.key !== previous.key) throw new Error("A new version keeps the same key");
+      const latest = await tx.growthMetricDefinition.aggregate({ where: { brandId: previous.brandId, key: previous.key }, _max: { version: true } });
+      const created = await tx.growthMetricDefinition.create({ data: { ...draft, brandId: previous.brandId, funnelStage, version: (latest._max.version ?? 0) + 1, effectiveAt: parseCentralInput(formData.get("effectiveAt")) ?? new Date(), status: "DRAFT", createdById: user.id, supersedesId: previous.id } });
+      await tx.auditEvent.create({ data: { actorId: user.id, action: "growth_metric_definition.version", entityType: "GrowthMetricDefinition", entityId: created.id, metadata: { key: created.key, version: created.version, supersedesId: previous.id } } });
+    }, { isolationLevel: "Serializable" });
+    revalidatePath("/command-center/scorecards");
+    return { saved: "version" };
+  });
+}
+
+export async function setMetricDefinitionStatusAction(definitionId: string, formData: FormData) {
+  await runFormAction(safeReturnTo(formData, "/command-center/scorecards"), async () => {
+    const user = await requireGrowthEditor();
+    const status = z.enum(["ACTIVE", "RETIRED"]).parse(formData.get("status"));
+    await prisma.$transaction(async (tx) => {
+      const definition = await tx.growthMetricDefinition.findUnique({ where: { id: definitionId } });
+      if (!definition) throw new Error("Metric definition not found");
+      if (status === "ACTIVE") {
+        if (definition.status !== "DRAFT") throw new Error("Only DRAFT definitions can be activated");
+        await tx.growthMetricDefinition.updateMany({ where: { brandId: definition.brandId, key: definition.key, status: "ACTIVE", id: { not: definition.id } }, data: { status: "RETIRED" } });
+      }
+      await tx.growthMetricDefinition.update({ where: { id: definitionId }, data: { status } });
+      await tx.auditEvent.create({ data: { actorId: user.id, action: `growth_metric_definition.${status.toLowerCase()}`, entityType: "GrowthMetricDefinition", entityId: definitionId, metadata: { key: definition.key, version: definition.version } } });
+    }, { isolationLevel: "Serializable" });
+    revalidatePath("/command-center/scorecards");
+  });
+}
+
+export async function recordMeasurementAction(formData: FormData) {
+  const returnTo = safeReturnTo(formData, "/command-center/scorecards");
+  await runFormAction(returnTo, async () => {
+    const user = await requireGrowthEditor();
+    const periodStart = parseCentralInput(formData.get("periodStart"));
+    const periodEndInclusive = parseCentralInput(formData.get("periodEnd"));
+    if (!periodStart || !periodEndInclusive) throw new Error("Period start and end are required");
+    const asOfAt = parseCentralInput(formData.get("asOfAt")) ?? new Date();
+    const measurement = await recordMeasurementTx(prisma, {
+      definitionId: required(formData, "definitionId", "Metric definition"), value: str(formData, "value"), numerator: str(formData, "numerator"), denominator: str(formData, "denominator"),
+      periodStart, periodEnd: inclusiveEndToExclusive(periodEndInclusive), asOfAt, source: required(formData, "source", "Source"), sourceUrl: str(formData, "sourceUrl"),
+      campaignId: str(formData, "campaignId"), activationId: str(formData, "activationId"), scope: str(formData, "scope"), cohortKey: str(formData, "cohortKey"),
+      externalKey: str(formData, "externalKey"), supersedesId: str(formData, "supersedesId"), notes: str(formData, "notes"), actorId: user.id,
+    });
+    revalidatePath("/command-center/scorecards");
+    revalidatePath("/command-center");
+    if (measurement.campaignId) revalidatePath(`/command-center/campaigns/${measurement.campaignId}`);
+    return { saved: "measurement" };
+  });
+}
+
+export async function reviewMeasurementAction(measurementId: string, formData: FormData) {
+  const returnTo = safeReturnTo(formData, "/command-center/scorecards");
+  await runFormAction(returnTo, async () => {
+    const user = await requireGrowthEditor();
+    await prisma.$transaction(async (tx) => {
+      const measurement = await tx.growthMeasurement.findUnique({ where: { id: measurementId }, select: { status: true, enteredById: true, reviewedAt: true } });
+      if (!measurement) throw new Error("Measurement not found");
+      if (measurement.reviewedAt) throw new Error("Measurement was already reviewed");
+      await tx.growthMeasurement.update({ where: { id: measurementId }, data: { status: measurement.status === "UNKNOWN" ? "UNKNOWN" : "REVIEWED", reviewedById: user.id, reviewedAt: new Date() } });
+      await tx.auditEvent.create({ data: { actorId: user.id, action: "growth_measurement.review", entityType: "GrowthMeasurement", entityId: measurementId, metadata: { previousStatus: measurement.status, selfReview: measurement.enteredById === user.id } } });
+    });
+    revalidatePath("/command-center/scorecards");
+    revalidatePath("/command-center");
+    return { saved: "reviewed" };
+  });
+}
+
+// Campaign targets and reviews ------------------------------------------
+
+export async function createCampaignTargetAction(campaignId: string, formData: FormData) {
+  await runFormAction(`/command-center/campaigns/${campaignId}`, async () => {
+    const user = await requireGrowthEditor();
+    const campaign = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { id: true, brands: { select: { id: true } }, activations: { select: { id: true } } } });
+    if (!campaign) throw new Error("Campaign not found");
+    const metricDefinitionId = required(formData, "metricDefinitionId", "Metric definition");
+    const definition = await prisma.growthMetricDefinition.findUnique({ where: { id: metricDefinitionId }, select: { brandId: true, status: true, unit: true } });
+    if (!definition) throw new Error("Metric definition not found");
+    const brandId = str(formData, "brandId") ?? definition.brandId;
+    const activationId = str(formData, "activationId");
+    const periodStart = parseCentralInput(formData.get("periodStart"));
+    const periodEndInclusive = parseCentralInput(formData.get("periodEnd"));
+    if (!periodStart || !periodEndInclusive) throw new Error("Target period start and end are required");
+    const periodEnd = inclusiveEndToExclusive(periodEndInclusive);
+    const dueAt = parseCentralInput(formData.get("dueAt"));
+    const { targetValue, baselineValue } = validateCampaignTarget({
+      campaign: { id: campaign.id, brandIds: campaign.brands.map((brand) => brand.id), activationIds: campaign.activations.map((activation) => activation.id) },
+      brandId, activationId, definition, targetValue: required(formData, "targetValue", "Target value"), baselineValue: str(formData, "baselineValue"), periodStart, periodEnd, dueAt,
+    });
+    const target = await prisma.campaignTarget.create({ data: { campaignId, brandId, metricDefinitionId, activationId, targetValue: new Prisma.Decimal(targetValue), baselineValue: baselineValue === null ? null : new Prisma.Decimal(baselineValue), periodStart, periodEnd, dueAt, notes: str(formData, "notes"), createdById: user.id } });
+    await prisma.auditEvent.create({ data: { actorId: user.id, action: "campaign_target.create", entityType: "CampaignTarget", entityId: target.id, metadata: { campaignId, metricDefinitionId, targetValue } } });
+    revalidatePath(`/command-center/campaigns/${campaignId}`);
+    revalidatePath("/command-center");
+    return { saved: "target" };
+  });
+}
+
+export async function deleteCampaignTargetAction(targetId: string) {
+  const target = await prisma.campaignTarget.findUnique({ where: { id: targetId }, select: { campaignId: true } });
+  const returnTo = target ? `/command-center/campaigns/${target.campaignId}` : "/command-center/campaigns";
+  await runFormAction(returnTo, async () => {
+    const user = await requireGrowthEditor();
+    if (!target) throw new Error("Target not found");
+    await prisma.$transaction(async (tx) => {
+      const campaign = await tx.campaign.findUnique({ where: { id: target.campaignId }, select: { status: true, _count: { select: { targets: true } } } });
+      if (campaign?.status === "ACTIVE" && campaign._count.targets <= 1) throw new Error("An ACTIVE campaign must keep at least one target. Add the replacement target first.");
+      await tx.campaignTarget.delete({ where: { id: targetId } });
+      await tx.auditEvent.create({ data: { actorId: user.id, action: "campaign_target.delete", entityType: "CampaignTarget", entityId: targetId, metadata: { campaignId: target.campaignId } } });
+    }, { isolationLevel: "Serializable" });
+    revalidatePath(returnTo);
+    return { saved: "target-removed" };
+  });
+}
+
+export async function addCampaignReviewAction(campaignId: string, formData: FormData) {
+  await runFormAction(`/command-center/campaigns/${campaignId}`, async () => {
+    const user = await requireGrowthEditor();
+    const decision = z.enum(["CONTINUE", "EXPAND", "REVISE", "STOP"]).parse(formData.get("decision"));
+    const learning = required(formData, "learning", "Learning");
+    const links = lines(formData, "evidenceLinks");
+    const measurementIds = formData.getAll("measurementIds").map(String).filter(Boolean);
+    const review = await prisma.campaignReview.create({ data: { campaignId, decision, learning, reviewedById: user.id, reviewedAt: new Date(), evidence: { links, measurementIds } } });
+    await prisma.auditEvent.create({ data: { actorId: user.id, action: "campaign_review.create", entityType: "CampaignReview", entityId: review.id, metadata: { campaignId, decision } } });
+    revalidatePath(`/command-center/campaigns/${campaignId}`);
+    revalidatePath("/command-center");
+    return { saved: "review" };
   });
 }
 
