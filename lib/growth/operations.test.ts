@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { completedAtFor, thisWeekActions, validateGrowthAction } from "./actions-rules";
 import { accountHealthSummary, isOpenOpportunity, latestSnapshotPerAccount, openOpportunityWhere } from "./dashboard";
-import { assertManualConfirmable, isSchedulableDestination, manualDestinationGaps, validatePublishedAt, validatePublishedUrl } from "./manual-publication";
+import { assertManualConfirmable, isSchedulableDestination, manualDestinationGaps, validateProfileUrl, validatePublishedAt, validatePublishedUrl } from "./manual-publication";
 import { groupRelationshipViews, relationshipViewKeys, type RelationshipOperatingRow } from "./relationships";
 
 const now = new Date("2026-10-15T17:00:00Z");
@@ -112,6 +112,15 @@ describe("manual publication guards", () => {
     expect(() => validatePublishedUrl("X", "https://evil-x.com/status/1")).toThrow("x.com");
     expect(() => validatePublishedUrl("X", "https://x.com/")).toThrow("specific post");
     expect(() => validatePublishedUrl("OTHER", "not a url")).toThrow("not a valid URL");
+  });
+
+  it("validates a manually verified profile URL against the account platform", () => {
+    expect(validateProfileUrl("X", "https://x.com/rankeyeq")).toBe("https://x.com/rankeyeq");
+    expect(validateProfileUrl("X", "https://twitter.com/rankeyeq")).toContain("twitter.com");
+    expect(() => validateProfileUrl("X", "https://www.facebook.com/rankeyeq")).toThrow("x.com");
+    expect(() => validateProfileUrl("INSTAGRAM", "http://instagram.com/rankeyeq")).toThrow("https");
+    expect(() => validateProfileUrl("X", "https://user:pw@x.com/rankeyeq")).toThrow("credentials");
+    expect(validateProfileUrl("OTHER", "https://example.com/team")).toBe("https://example.com/team");
   });
 
   it("requires a prepared manual handoff with a current approval and blocks repeats", () => {

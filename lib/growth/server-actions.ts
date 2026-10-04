@@ -14,6 +14,7 @@ import { inclusiveEndToExclusive, metricAggregations, metricUnits, funnelStages,
 import { recordMeasurementTx } from "./measurement-store";
 import { assertCanAllocatePortfolio, assertCanEditGrowth } from "./permissions";
 import { parseWeeklyHours, portfolioAllocations } from "./priorities";
+import { validateProfileUrl, type SocialPlatform } from "./manual-publication";
 import { confirmManualPublicationTx, prepareManualHandoffTx } from "./publication-store";
 import { approveGrowthBrief, archiveGrowthBrief, createGrowthBriefDraft, setPortfolioPriority, updateGrowthBriefDraft } from "./strategy-store";
 import { parseCentralInput } from "./time";
@@ -390,16 +391,16 @@ export async function updateRelationshipOperatingAction(relationshipId: string, 
 // Manual publishing ------------------------------------------------------
 
 export async function verifyDestinationIdentityAction(accountId: string, formData: FormData) {
-  const account = await prisma.socialAccount.findUnique({ where: { id: accountId }, select: { brandId: true } });
+  const account = await prisma.socialAccount.findUnique({ where: { id: accountId }, select: { brandId: true, platform: true } });
   const returnTo = safeReturnTo(formData, account ? `/command-center/brands/${account.brandId}` : "/command-center/settings/integrations");
   await runFormAction(returnTo, async () => {
     const user = await requireGrowthEditor();
     if (!account) throw new Error("Account not found");
-    const profileUrl = str(formData, "profileUrl");
+    const submittedProfileUrl = str(formData, "profileUrl");
     const handle = str(formData, "handle");
     const source = required(formData, "verificationSource", "Verification source");
-    if (!profileUrl && !handle) throw new Error("A verified profile URL or handle is required");
-    if (profileUrl && !/^https:\/\//i.test(profileUrl)) throw new Error("Profile URL must use https");
+    if (!submittedProfileUrl && !handle) throw new Error("A verified profile URL or handle is required");
+    const profileUrl = submittedProfileUrl ? validateProfileUrl(account.platform as SocialPlatform, submittedProfileUrl) : null;
     const verifiedAt = parseCentralInput(formData.get("verifiedAt")) ?? new Date();
     if (verifiedAt.getTime() > Date.now() + 5 * 60_000) throw new Error("Verification time cannot be in the future");
     await prisma.$transaction(async (tx) => {

@@ -33,6 +33,21 @@ export function validatePublishedUrl(platform: SocialPlatform, raw: string) {
   return url.toString();
 }
 
+/** A manually verified profile URL must be https and live on the account's platform. */
+export function validateProfileUrl(platform: SocialPlatform, raw: string) {
+  let url: URL;
+  try {
+    url = new URL(raw.trim());
+  } catch {
+    throw new Error("Profile URL is not a valid URL");
+  }
+  if (url.protocol !== "https:") throw new Error("Profile URL must use https");
+  if (url.username || url.password) throw new Error("Profile URL must not contain credentials");
+  const allowed = platformHosts[platform];
+  if (allowed && !hostMatches(url.hostname, allowed)) throw new Error(`Profile URL must be on ${allowed.join(" or ")} for a ${platform} account`);
+  return url.toString();
+}
+
 export type DestinationAccount = {
   brandId: string;
   lifecycleStatus: "KNOWN" | "ACTIVE" | "INACTIVE" | "DISABLED";
