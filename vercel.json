@@ -1,0 +1,7 @@
+{
+  "git": {
+    "deploymentEnabled": {
+      "growth-os-v1/*": false
+    }
+  }
+}
