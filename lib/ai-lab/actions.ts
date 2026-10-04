@@ -9,6 +9,7 @@ import { resolveGenerationContext } from "@/lib/ai-lab/context";
 import { createDraftFromGenerationRun } from "@/lib/ai-lab/draft";
 import { generateMarketingExecution } from "@/lib/ai-lab/provider";
 import { AI_LAB_GENERATION_VERSION, generationInputSchema, type AiLabActionState } from "@/lib/ai-lab/schema";
+import { applyStrategyGate } from "@/lib/ai-lab/strategy";
 import { prisma } from "@/lib/prisma";
 
 async function requireEditor() {
@@ -63,15 +64,16 @@ export async function generateExecutionAction(_previous: AiLabActionState, formD
     } });
     runId = run.id;
     const generated = await generateMarketingExecution(context);
+    const output = applyStrategyGate(generated.output, context.strategy, input.channel);
     await prisma.generationRun.update({ where: { id: run.id }, data: {
       provider: generated.provider,
       model: generated.model,
-      recommendation: generated.output.recommendation,
-      structuredOutput: generated.output as Prisma.InputJsonValue,
+      recommendation: output.recommendation,
+      structuredOutput: output as Prisma.InputJsonValue,
       status: "SUCCEEDED",
       errorMessage: null,
     } });
-    await prisma.auditEvent.create({ data: { actorId: user.id, action: "ai_lab.generate", entityType: "GenerationRun", entityId: run.id, metadata: { recommendation: generated.output.recommendation, generationVersion: AI_LAB_GENERATION_VERSION } } });
+    await prisma.auditEvent.create({ data: { actorId: user.id, action: "ai_lab.generate", entityType: "GenerationRun", entityId: run.id, metadata: { recommendation: output.recommendation, modelRecommendation: generated.output.recommendation, generationVersion: AI_LAB_GENERATION_VERSION, briefId: context.strategy.growthBrief?.id ?? null, briefRevision: context.strategy.growthBrief?.revision ?? null, blockingGaps: context.strategy.blockingGaps } } });
   } catch (error) {
     if (runId) await prisma.generationRun.update({ where: { id: runId }, data: { status: "FAILED", errorMessage: publicError(error).slice(0, 10000) } });
     return { runId, error: publicError(error) };

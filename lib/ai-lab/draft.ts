@@ -18,6 +18,15 @@ export function draftCreationDecision(run: DraftableRun) {
   return { kind: "CREATE" as const };
 }
 
+/** Uses the resolved activation or campaign objective when the run had one; older or campaign-less runs fall back to the channel description. */
+export function draftObjective(snapshot: Record<string, unknown> | null | undefined, channel: string) {
+  const brand = (snapshot?.brand as { name?: string } | undefined)?.name || "the selected Brand";
+  const activation = snapshot?.activation as { objective?: string | null } | null | undefined;
+  const campaign = snapshot?.campaign as { objective?: string | null } | null | undefined;
+  const objective = activation?.objective?.trim() || campaign?.objective?.trim();
+  return objective ? `${objective} (${channel} execution for ${brand})` : `Create a ${channel} execution for ${brand}`;
+}
+
 export async function createDraftFromGenerationRun(tx: Prisma.TransactionClient, runId: string, actorId: string) {
   await tx.$queryRaw`SELECT "id" FROM "GenerationRun" WHERE "id" = ${runId} FOR UPDATE`;
   const run = await tx.generationRun.findUnique({ where: { id: runId } });
@@ -26,17 +35,16 @@ export async function createDraftFromGenerationRun(tx: Prisma.TransactionClient,
   if (decision.kind === "EXISTING") return decision.contentId;
 
   const output = generatedExecutionSchema.parse(run.structuredOutput);
-  const snapshot = run.resolvedContext as Record<string, unknown>;
-  const brand = snapshot.brand as { name?: string } | undefined;
+  const objective = draftObjective(run.resolvedContext as Record<string, unknown> | null, run.channel);
   const angle = await tx.brandAngle.upsert({
     where: { opportunityId_brandId: { opportunityId: run.opportunityId!, brandId: run.brandId! } },
-    update: { objective: `Create a ${run.channel} execution for ${brand?.name || "the selected Brand"}`, hook: output.editorialAngle, rationale: `${output.reason}\n\nWhy now: ${output.whyNow}`, suggestedVisual: output.visualBrief || null },
-    create: { opportunityId: run.opportunityId!, brandId: run.brandId!, objective: `Create a ${run.channel} execution for ${brand?.name || "the selected Brand"}`, hook: output.editorialAngle, rationale: `${output.reason}\n\nWhy now: ${output.whyNow}`, suggestedVisual: output.visualBrief || null },
+    update: { objective, hook: output.editorialAngle, rationale: `${output.reason}\n\nWhy now: ${output.whyNow}`, suggestedVisual: output.visualBrief || null },
+    create: { opportunityId: run.opportunityId!, brandId: run.brandId!, objective, hook: output.editorialAngle, rationale: `${output.reason}\n\nWhy now: ${output.whyNow}`, suggestedVisual: output.visualBrief || null },
   });
   const draft = await tx.contentDraft.create({ data: {
     brandAngleId: angle.id,
     status: "DRAFT",
-    objective: `Create a ${run.channel} execution for ${brand?.name || "the selected Brand"}`,
+    objective,
     hook: output.editorialAngle,
     rationale: `${output.reason}\n\nWhy now: ${output.whyNow}`,
     body: output.draftCopy,
