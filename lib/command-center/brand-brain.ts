@@ -59,7 +59,7 @@ export function shouldInitializeBrandBrain(brandBrainVersion: number | null) {
 
 export const sngLabsBrandBrain: BrandBrainFormValue = {
   purpose: "Create new participation layers around sports, fandom, competition, connection, and attention. SNG LABS identifies familiar behaviors and experiences, then builds products that let people participate in them differently.",
-  corePromise: "Transforming Fans from Spectators into Participants.",
+  corePromise: "Building What Comes Next in Sports.",
   coreProposition: "SNG LABS is a sports-tech product studio building new ways for fans to participate in the things they already care about. Across the portfolio, SNG looks for passive, fragmented, unmeasured, or underserved behavior and asks what happens when software turns it into a participatory, measurable experience. We build new ways to participate.",
   audience: "Strategic partners, sports-industry executives, gaming and fantasy-industry executives, sports-tech operators, teams, leagues, venues, media and advertising executives, investors, collaborators, strategically relevant creators, sports-business media, technology media, and entrepreneurial building audiences.",
   secondaryAudiences: ["Fans and users interested in following SNG LABS", "People interested in the products being built", "Minnesota innovation and entrepreneurial communities"],

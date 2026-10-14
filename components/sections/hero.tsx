@@ -61,10 +61,10 @@ function HeroCopy({ size }: { size: "desktop" | "mobile" }) {
 
   return (
     <>
-      <h1 className={`animate-fade-up ${headline}`}>
-        <span className="block">Transforming Fans</span>
-        <span className="mt-1 block sm:mt-1.5">from Spectators</span>
-        <span className="mt-1 block sm:mt-1.5">into Participants.</span>
+      <h1 className={`animate-fade-up whitespace-nowrap ${headline}`}>
+        <span className="block">Building What</span>
+        <span className="mt-1 block sm:mt-1.5">Comes Next</span>
+        <span className="mt-1 block sm:mt-1.5">in Sports.</span>
       </h1>
       <p
         className={`animate-fade-up-delay-1 max-w-[38rem] leading-relaxed text-muted-strong ${
