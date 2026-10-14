@@ -22,7 +22,7 @@ describe("Brand Brain", () => {
   });
 
   it("keeps SNG LABS above the portfolio and allows Do Not Post", () => {
-    expect(sngLabsBrandBrain.corePromise).toBe("Transforming Fans from Spectators into Participants.");
+    expect(sngLabsBrandBrain.corePromise).toBe("Building What Comes Next in Sports.");
     expect(sngLabsBrandBrain.coreProposition).toContain("sports-tech product studio");
     expect(sngLabsBrandBrain.contentPillars).toEqual(["From Spectator to Participant", "Build New Ways to Play", "Product Thesis", "Founder / Builder", "Portfolio / Lab", "Partnerships / What Could This Become?"]);
     expect(sngLabsBrandBrain.contentModes.map((mode) => mode.name)).toEqual(["Company / Portfolio", "Product Thesis", "Founder / Builder", "Build in Public", "Milestone", "Partnership", "Industry / Category", "Media / Press", "Investor / Strategic", "Outreach", "Do Not Post"]);
