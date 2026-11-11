@@ -146,15 +146,15 @@ export const products: Product[] = [
     tagline: "Sports-first social connection.",
     description:
       "A social matching platform designed to connect people through shared teams, rivalries, and sports culture.",
-    status: "In Development",
+    status: "Live",
     websiteUrl: PENDING_PRODUCT_URLS.teamM8tes,
     ctaLabel: PENDING_PRODUCT_URLS.teamM8tes
       ? "Visit Platform"
-      : "In Development",
+      : "Partnership Inquiries",
     external: Boolean(PENDING_PRODUCT_URLS.teamM8tes),
     note: PENDING_PRODUCT_URLS.teamM8tes
       ? undefined
-      : "No public website yet — CTA routes to contact.",
+      : "Public website URL pending — CTA routes to contact.",
     accent: "#d4b8a8",
   },
 ];
