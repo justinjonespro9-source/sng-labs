@@ -3,6 +3,7 @@ export const PRODUCTION_SITE_URL = "https://www.snglabs.com";
 export const PUBLIC_CONTACT_EMAIL = "info@snglabs.com";
 
 export const PENDING_PRODUCT_URLS = {
+  exactStat: "https://exact-stat.com",
   handicapHero: "https://www.handicap-hero.com",
   stadiumSlop: "https://www.stadiumslop.com",
   teamM8tes: "https://www.team-m8tes.com",
@@ -62,6 +63,23 @@ export type Product = {
 };
 
 export const products: Product[] = [
+  {
+    id: "exactstat",
+    name: "ExactStat",
+    tagline: "Beyond Binary.",
+    description:
+      "ExactStat explores the next evolution of sports prediction markets with exact-number outcomes, customizable ranges, interactive liquidity distributions, and dynamic projected returns. Built with a vision of shared global liquidity across participating licensed operators.",
+    status: "Live",
+    websiteUrl: PENDING_PRODUCT_URLS.exactStat,
+    ctaLabel: PENDING_PRODUCT_URLS.exactStat
+      ? "Visit Platform"
+      : "Partnership Inquiries",
+    external: Boolean(PENDING_PRODUCT_URLS.exactStat),
+    note: PENDING_PRODUCT_URLS.exactStat
+      ? undefined
+      : "Public website URL pending — CTA routes to contact.",
+    accent: "#e4c17a",
+  },
   {
     id: "handicap-hero",
     name: "Handicap Hero",
