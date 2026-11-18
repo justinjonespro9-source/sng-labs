@@ -2,7 +2,7 @@ export const growthStages = ["DEVELOPMENT", "VALIDATION", "PILOT", "ACQUISITION"
 export type GrowthStage = (typeof growthStages)[number];
 
 export const growthStageLabels: Record<GrowthStage, string> = {
-  DEVELOPMENT: "Development",
+  DEVELOPMENT: "Pre-launch / Development",
   VALIDATION: "Validation",
   PILOT: "Pilot",
   ACQUISITION: "Acquisition",

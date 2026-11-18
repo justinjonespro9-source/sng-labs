@@ -4,6 +4,7 @@ import { eyezOnThePrizeBrandBrain, fantasyTrackBrandBrain, handicapHeroBrandBrai
 import { campaignDefinitions, growthProgramDefinitions } from "../lib/command-center/campaign-definitions";
 import { seedSportsIdentityFoundation } from "../lib/sports/seed-foundation";
 import { initializeExactStat } from "../lib/growth/exactstat";
+import { initializeVoteYourCast } from "../lib/growth/voteyourcast";
 
 const prisma = new PrismaClient();
 
@@ -281,6 +282,9 @@ async function main() {
 
   const exactStat = await initializeExactStat(prisma);
   console.log(exactStat.performed.length ? `Initialized ExactStat: ${exactStat.performed.join(", ")}.` : "Preserved existing ExactStat brand, Brand Brain and Growth Briefs.");
+
+  const voteYourCast = await initializeVoteYourCast(prisma);
+  console.log(voteYourCast.performed.length ? `Initialized VoteYourCast: ${voteYourCast.performed.join(", ")}.` : "Preserved existing VoteYourCast brand, Brand Brain and Growth Briefs.");
 
   const brands = await prisma.brand.findMany();
   const brandIds = Object.fromEntries(brands.map((brand) => [brand.key, brand.id]));

@@ -9,9 +9,10 @@ import { isSchedulableDestination } from "@/lib/growth/manual-publication";
 import { formatCentralDateTime } from "@/lib/growth/time";
 import { prisma } from "@/lib/prisma";
 
+const socialPlatforms = ["X", "INSTAGRAM", "FACEBOOK", "DISCORD", "LINKEDIN", "TIKTOK", "YOUTUBE", "THREADS", "OTHER"] as const;
 const actionClass = "rounded-lg border border-white/10 px-3 py-2 text-xs text-white";
 
-export default async function QueuePage({ searchParams }: { searchParams: Promise<{ status?: string; brand?: string; saved?: string; error?: string }> }) {
+export default async function QueuePage({ searchParams }: { searchParams: Promise<{ status?: string; brand?: string; platform?: string; saved?: string; error?: string }> }) {
   const filters = await searchParams;
   const drafts = await prisma.contentDraft.findMany({
     where: { status: contentStatuses.includes(filters.status as never) ? filters.status as never : undefined, brandAngle: filters.brand ? { brandId: filters.brand } : undefined },
@@ -19,10 +20,17 @@ export default async function QueuePage({ searchParams }: { searchParams: Promis
     orderBy: { updatedAt: "desc" },
   });
   const brands = await prisma.brand.findMany({ where: { active: true }, orderBy: { name: "asc" } });
+  const platform = socialPlatforms.includes(filters.platform as never) ? filters.platform as (typeof socialPlatforms)[number] : undefined;
+  const history = await prisma.publication.findMany({
+    where: { status: "PUBLISHED", socialAccount: platform ? { platform } : undefined, draft: filters.brand ? { brandAngle: { brandId: filters.brand } } : undefined },
+    include: { socialAccount: true, draft: { include: { brandAngle: { include: { brand: true } } } } },
+    orderBy: { publishedAt: "desc" },
+    take: 50,
+  });
 
   return <div><PageHeader title="Content Queue" description="Draft, review, approve, and schedule—human approval remains the gate before public distribution. Publishing is manual: no content is posted by the system." />
     <FormNotice saved={filters.saved} error={filters.error} />
-    <form className="mt-7 flex flex-wrap gap-3"><Select label="Status" name="status" defaultValue={filters.status || ""}><option value="">All statuses</option>{contentStatuses.map((status) => <option key={status}>{status.replaceAll("_", " ")}</option>)}</Select><Select label="Brand" name="brand" defaultValue={filters.brand || ""}><option value="">All brands</option>{brands.map((brand) => <option key={brand.id} value={brand.id}>{brand.name}</option>)}</Select><button className="self-end rounded-lg border border-white/10 px-4 py-2.5 text-sm text-white">Filter</button></form>
+    <form className="mt-7 flex flex-wrap gap-3"><Select label="Status" name="status" defaultValue={filters.status || ""}><option value="">All statuses</option>{contentStatuses.map((status) => <option key={status}>{status.replaceAll("_", " ")}</option>)}</Select><Select label="Brand" name="brand" defaultValue={filters.brand || ""}><option value="">All brands</option>{brands.map((brand) => <option key={brand.id} value={brand.id}>{brand.name}</option>)}</Select><Select label="Platform (history)" name="platform" defaultValue={filters.platform || ""}><option value="">All platforms</option>{socialPlatforms.map((item) => <option key={item}>{item}</option>)}</Select><button className="self-end rounded-lg border border-white/10 px-4 py-2.5 text-sm text-white">Filter</button></form>
     <section className="mt-6 space-y-4">{drafts.length ? drafts.map((draft) => {
       const latestRevision = draft.approvals.find((approval) => approval.decision === "REVISION_REQUESTED");
       const schedulableAccounts = draft.brandAngle.brand.socialAccounts.filter((account) => isSchedulableDestination(account, draft.brandAngle.brandId));
@@ -45,6 +53,7 @@ export default async function QueuePage({ searchParams }: { searchParams: Promis
         </div>
         {draft.approvals.length > 0 && <details className="mt-5 border-t border-white/7 pt-4"><summary className="cursor-pointer text-xs text-[#747976]">Review history ({draft.approvals.length})</summary><div className="mt-3 space-y-2">{draft.approvals.map((approval) => <p key={approval.id} className="text-xs text-[#8f9391]">{formatCentralDateTime(approval.createdAt)} · {approval.decision.replaceAll("_", " ")}{approval.comment ? ` — ${approval.comment}` : ""}</p>)}</div></details>}
       </article>;
-    }) : <div className="rounded-2xl border border-dashed border-white/10 p-12 text-center"><p className="text-sm text-white">Nothing in this queue view</p><p className="mt-2 text-xs text-[#777b78]">Create content from an Opportunity to carry its context into a new draft.</p><Link href="/command-center/opportunities" className="mt-4 inline-block text-xs text-[#b8d4c8]">Open Opportunity Feed →</Link></div>}</section>
+    }) : <div className="rounded-2xl border border-dashed border-white/10 p-12 text-center"><p className="text-sm text-white">Nothing in this queue view</p><p className="mt-2 text-xs text-[#777b78]">Create content from a Content Opportunity to carry its context into a new draft.</p><Link href="/command-center/opportunities" className="mt-4 inline-block text-xs text-[#b8d4c8]">Open Content Opportunities →</Link></div>}</section>
+    <section className="mt-10 rounded-2xl border border-white/8 bg-[#101214] p-6"><div className="flex items-center justify-between"><h2 className="font-display text-lg text-white">Publication history</h2><span className="text-xs text-[#747976]">{history.length === 50 ? "Latest 50" : history.length}</span></div><p className="mt-1 text-xs text-[#747976]">Recorded PUBLISHED items, filtered by the Brand and Platform above.</p><div className="mt-4 space-y-2">{history.map((item) => <div key={item.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-white/7 p-3"><div><p className="text-sm text-white">{item.draft.hook}</p><p className="mt-1 text-xs text-[#8f9391]">{item.draft.brandAngle.brand.name} · {item.socialAccount.platform}{item.socialAccount.handle ? ` ${item.socialAccount.handle}` : ""} · {item.method?.toLowerCase() ?? "method not recorded"}</p></div><div className="text-right text-xs text-[#b8d4c8]">{item.publishedAt ? formatCentralDateTime(item.publishedAt) : "Time not recorded"}{item.platformUrl && <> · <a href={item.platformUrl} target="_blank" rel="noreferrer" className="underline">post</a></>} · <Link href={`/command-center/queue/${item.draftId}/publish`} className="underline">record</Link></div></div>)}{!history.length && <p className="text-sm text-[#777b78]">No published items match these filters.</p>}</div></section>
   </div>;
 }

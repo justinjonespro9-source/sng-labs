@@ -14,6 +14,7 @@ import { inclusiveEndToExclusive, metricAggregations, metricUnits, funnelStages,
 import { recordMeasurementTx } from "./measurement-store";
 import { assertCanAllocatePortfolio, assertCanEditGrowth } from "./permissions";
 import { parseWeeklyHours, portfolioAllocations } from "./priorities";
+import { relationshipOperatingGaps } from "./relationships";
 import { validateProfileUrl, type SocialPlatform } from "./manual-publication";
 import { confirmManualPublicationTx, prepareManualHandoffTx } from "./publication-store";
 import { approveGrowthBrief, archiveGrowthBrief, createGrowthBriefDraft, setPortfolioPriority, updateGrowthBriefDraft } from "./strategy-store";
@@ -367,14 +368,20 @@ export async function updateRelationshipOperatingAction(relationshipId: string, 
     const priority = z.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"]).nullable().parse(str(formData, "priority"));
     const campaignIds = [...new Set(formData.getAll("campaignIds").map(String).filter(Boolean))];
     await prisma.$transaction(async (tx) => {
-      const current = await tx.relationship.findUnique({ where: { id: relationshipId }, select: { id: true, campaignLinks: { select: { campaignId: true } } } });
+      const current = await tx.relationship.findUnique({ where: { id: relationshipId }, select: { id: true, stage: true, campaignLinks: { select: { campaignId: true } } } });
       if (!current) throw new Error("Relationship not found");
+      const nextAction = str(formData, "nextAction");
+      const nextFollowUpAt = parseCentralInput(formData.get("nextFollowUpAt"));
+      const gaps = relationshipOperatingGaps({ stage: current.stage, nextAction, nextFollowUpAt });
+      if (gaps.length) throw new Error(gaps.join("; "));
+      const brandIds = [...new Set(formData.getAll("brandIds").map(String).filter(Boolean))];
       const existing = new Set(current.campaignLinks.map((link) => link.campaignId));
       const keep = new Set(campaignIds);
       await tx.relationship.update({ where: { id: relationshipId }, data: {
         ownerId: str(formData, "ownerId"), fitReason: str(formData, "fitReason"), offer: str(formData, "offer"), audience: str(formData, "audience"),
-        priority, priorityEvidence: str(formData, "priorityEvidence"), nextAction: str(formData, "nextAction"), nextFollowUpAt: parseCentralInput(formData.get("nextFollowUpAt")),
+        priority, priorityEvidence: str(formData, "priorityEvidence"), nextAction, nextFollowUpAt,
         commitment: str(formData, "commitment"), outcome: str(formData, "outcome"),
+        relevantBrands: { set: brandIds.map((id) => ({ id })) },
       } });
       const removed = [...existing].filter((id) => !keep.has(id));
       const added = campaignIds.filter((id) => !existing.has(id));

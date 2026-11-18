@@ -2,12 +2,51 @@ import { addCentralDays, startOfCentralDay } from "./time";
 
 export const closedRelationshipStages = new Set(["CLOSED", "NOT_PURSUING"]);
 
+export const relationshipStages = ["PROSPECT", "CONTACTED", "CONVERSATION", "OPPORTUNITY", "PARTNER", "CLOSED", "NOT_PURSUING"] as const;
+export type RelationshipStageName = (typeof relationshipStages)[number];
+
+/** BD pipeline labels. OPPORTUNITY here is a deal stage, not a Content Opportunity. */
+export const relationshipStageLabels: Record<RelationshipStageName, string> = {
+  PROSPECT: "Prospect",
+  CONTACTED: "Contacted",
+  CONVERSATION: "Conversation",
+  OPPORTUNITY: "BD opportunity",
+  PARTNER: "Partner",
+  CLOSED: "Closed",
+  NOT_PURSUING: "Not pursuing",
+};
+
+export const organizationTypeGuidance: Record<string, string> = {
+  MEDIA: "Journalists, publications, shows",
+  CREATOR: "Individual influencers and creators",
+  CREATOR_NETWORK: "Creator networks and multi-channel groups",
+  PODCAST: "Podcasts and audio shows",
+  TEAM: "Teams and team properties",
+  VENUE: "Venues and event operators",
+  PARTNER: "Strategic or licensing partners",
+  AGENCY: "Agencies and intermediaries",
+  INVESTOR: "Investors and capital partners",
+  OTHER: "Other organizations",
+};
+
 /** Operating rules, not facts about prospect interest. Adjust here; the UI labels them as rules. */
 export const relationshipOperatingRules = {
   dueWithinDays: 7,
   stalledAfterDays: 21,
   recentResponseDays: 14,
 };
+
+export function activeRelationshipRequiresNextStep(stage: string) {
+  return isActiveRelationship(stage);
+}
+
+export function relationshipOperatingGaps(input: { stage: string; nextAction: string | null | undefined; nextFollowUpAt: Date | null | undefined }) {
+  if (!activeRelationshipRequiresNextStep(input.stage)) return [] as string[];
+  const gaps: string[] = [];
+  if (!input.nextAction?.trim()) gaps.push("Next action is required for active relationship stages");
+  if (!input.nextFollowUpAt) gaps.push("Next follow-up date is required for active relationship stages");
+  return gaps;
+}
 
 export type RelationshipOperatingRow = {
   id: string;

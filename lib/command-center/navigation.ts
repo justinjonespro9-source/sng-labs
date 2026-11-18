@@ -3,7 +3,7 @@ export const commandCenterNavigationGroups = [
     { href: "/command-center", label: "Home", key: "overview" },
     { href: "/command-center/today", label: "Today", key: "today" },
     { href: "/command-center/relationships", label: "Relationships", key: "relationships" },
-    { href: "/command-center/live-desk", label: "Opportunity Review", key: "live-desk" },
+    { href: "/command-center/live-desk", label: "Content Opportunity Review", key: "live-desk" },
   ] },
   { label: "Plan", items: [
     { href: "/command-center/growth", label: "Growth", key: "growth" },
@@ -14,7 +14,7 @@ export const commandCenterNavigationGroups = [
   { label: "Intelligence", items: [
     { href: "/command-center/scorecards", label: "Scorecards", key: "scorecards" },
     { href: "/command-center/sports-intelligence", label: "Sports Intelligence", key: "sports-intelligence" },
-    { href: "/command-center/opportunities", label: "Opportunity Feed", key: "opportunities" },
+    { href: "/command-center/opportunities", label: "Content Opportunities", key: "opportunities" },
     { href: "/command-center/ai-lab", label: "AI Lab", key: "ai-lab" },
     { href: "/command-center/sports", label: "Sports Data", key: "sports" },
     { href: "/command-center/analytics", label: "Analytics", key: "analytics" },

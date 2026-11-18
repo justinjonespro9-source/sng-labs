@@ -5,13 +5,14 @@ import { FormNotice } from "@/components/command-center/form-notice";
 import { requireCommandCenterUser } from "@/lib/auth/session";
 import { addRelationshipActivity, updateRelationshipStage } from "@/lib/command-center/actions";
 import { canEditGrowth } from "@/lib/growth/permissions";
+import { relationshipStageLabels, relationshipStages } from "@/lib/growth/relationships";
 import { updateRelationshipOperatingAction } from "@/lib/growth/server-actions";
 import { calendarDayKey, formatCalendarDay, formatCentralDateTime } from "@/lib/growth/time";
 import { prisma } from "@/lib/prisma";
 
 export default async function RelationshipDetailPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ saved?: string; error?: string }> }) {
   const [{ id }, notice, user] = await Promise.all([params, searchParams, requireCommandCenterUser()]);
-  const [item, campaigns, activations, users] = await Promise.all([prisma.relationship.findUnique({ where: { id }, include: { organization: { include: { market: true, teams: true } }, contact: true, owner: true, campaign: true, campaignLinks: { include: { campaign: true } }, relevantBrands: true, activations: true, growthActions: { where: { status: { in: ["OPEN", "IN_PROGRESS", "BLOCKED"] } }, orderBy: { createdAt: "desc" } }, activities: { include: { campaign: true, activation: true }, orderBy: { occurredAt: "desc" } } } }), prisma.campaign.findMany({ where: { status: { in: ["PLANNING", "ACTIVE", "PAUSED"] } }, orderBy: { name: "asc" } }), prisma.campaignActivation.findMany({ where: { status: { in: ["PLANNED", "READY", "ACTIVE"] } }, include: { campaign: true }, orderBy: { name: "asc" } }), prisma.user.findMany({ select: { id: true, name: true, email: true }, orderBy: { email: "asc" } })]);
+  const [item, campaigns, activations, users, brands] = await Promise.all([prisma.relationship.findUnique({ where: { id }, include: { organization: { include: { market: true, teams: true } }, contact: true, owner: true, campaign: true, campaignLinks: { include: { campaign: true } }, relevantBrands: true, activations: true, growthActions: { where: { status: { in: ["OPEN", "IN_PROGRESS", "BLOCKED"] } }, orderBy: { createdAt: "desc" } }, activities: { include: { campaign: true, activation: true }, orderBy: { occurredAt: "desc" } } } }), prisma.campaign.findMany({ where: { status: { in: ["PLANNING", "ACTIVE", "PAUSED"] } }, orderBy: { name: "asc" } }), prisma.campaignActivation.findMany({ where: { status: { in: ["PLANNED", "READY", "ACTIVE"] } }, include: { campaign: true }, orderBy: { name: "asc" } }), prisma.user.findMany({ select: { id: true, name: true, email: true }, orderBy: { email: "asc" } }), prisma.brand.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } })]);
   if (!item) notFound();
   const editable = canEditGrowth(user.role);
   const linkedCampaigns = new Map(item.campaignLinks.map((link) => [link.campaignId, link.campaign]));
@@ -19,7 +20,7 @@ export default async function RelationshipDetailPage({ params, searchParams }: {
   const campaignChoices = [...new Map([...campaigns, ...linkedCampaigns.values()].map((campaign) => [campaign.id, { id: campaign.id, name: campaign.name }])).values()];
 
   return <div><Link href="/command-center/relationships" className="text-xs text-[#b8d4c8]">← Relationship Pipeline</Link>
-    <div className="mt-5 flex flex-col justify-between gap-4 sm:flex-row"><div><p className="text-xs text-[#747976]">{item.organization.type} · {item.organization.market?.name || "No market"}</p><h1 className="mt-2 font-display text-3xl text-white">{item.organization.name}</h1><p className="mt-2 text-sm text-[#929795]">{item.contact ? `${item.contact.name}${item.contact.title ? ` · ${item.contact.title}` : ""}` : "No contact set"}</p></div>{editable ? <form action={updateRelationshipStage.bind(null, item.id)} className="flex items-end gap-2"><Select label="Stage" name="stage" defaultValue={item.stage}>{["PROSPECT","CONTACTED","CONVERSATION","OPPORTUNITY","PARTNER","CLOSED","NOT_PURSUING"].map((x) => <option key={x}>{x}</option>)}</Select><button className="rounded-lg border border-white/10 px-3 py-2.5 text-xs text-white">Move</button></form> : <p className="self-end text-xs text-[#8f9391]">{item.stage.replaceAll("_", " ")}</p>}</div>
+    <div className="mt-5 flex flex-col justify-between gap-4 sm:flex-row"><div><p className="text-xs text-[#747976]">{item.organization.type} · {item.organization.market?.name || "No market"} · BD stage {relationshipStageLabels[item.stage as keyof typeof relationshipStageLabels] || item.stage}</p><h1 className="mt-2 font-display text-3xl text-white">{item.organization.name}</h1><p className="mt-2 text-sm text-[#929795]">{item.contact ? `${item.contact.name}${item.contact.title ? ` · ${item.contact.title}` : ""}` : "No contact set"}</p></div>{editable ? <form action={updateRelationshipStage.bind(null, item.id)} className="flex items-end gap-2"><Select label="BD stage" name="stage" defaultValue={item.stage}>{relationshipStages.map((x) => <option key={x} value={x}>{relationshipStageLabels[x]}</option>)}</Select><button className="rounded-lg border border-white/10 px-3 py-2.5 text-xs text-white">Move</button></form> : <p className="self-end text-xs text-[#8f9391]">{relationshipStageLabels[item.stage as keyof typeof relationshipStageLabels] || item.stage}</p>}</div>
     <FormNotice saved={notice.saved} error={notice.error} />
 
     <section className="mt-7 grid gap-4 lg:grid-cols-4">
@@ -33,8 +34,8 @@ export default async function RelationshipDetailPage({ params, searchParams }: {
     {item.growthActions.length > 0 && <section className="mt-5 rounded-2xl border border-white/8 bg-[#101214] p-5"><p className="text-xs text-[#747976]">Linked growth actions (separate work items, not the relationship&apos;s next action)</p><ul className="mt-3 space-y-2">{item.growthActions.map((action) => <li key={action.id} className="text-sm text-white">{action.title} <span className="text-xs text-[#747976]">· {action.status.replaceAll("_", " ")}{action.blocker ? ` — ${action.blocker}` : ""}</span></li>)}</ul></section>}
 
     {editable && <details className="mt-5 rounded-2xl border border-white/8 bg-[#101214] p-6"><summary className="cursor-pointer font-display text-lg text-white">Edit operating fields</summary><form action={updateRelationshipOperatingAction.bind(null, item.id)} className="mt-5 grid gap-4 sm:grid-cols-2">
-      <div className="sm:col-span-2"><Field label="Next action" name="nextAction" defaultValue={item.nextAction ?? ""} placeholder="The single next thing we will do" /></div>
-      <Field label="Next action due (CT)" name="nextFollowUpAt" type="date" defaultValue={calendarDayKey(item.nextFollowUpAt)} />
+      <div className="sm:col-span-2"><Field label="Next action" name="nextAction" required defaultValue={item.nextAction ?? ""} placeholder="The single next thing we will do" /></div>
+      <Field label="Next action due (CT)" name="nextFollowUpAt" type="date" required defaultValue={calendarDayKey(item.nextFollowUpAt)} />
       <Select label="Owner" name="ownerId" defaultValue={item.ownerId ?? ""}><option value="">Unassigned</option>{users.map((u) => <option key={u.id} value={u.id}>{u.name || u.email}</option>)}</Select>
       <TextArea label="Why they fit" name="fitReason" rows={2} defaultValue={item.fitReason ?? ""} />
       <TextArea label="Offer to them" name="offer" rows={2} defaultValue={item.offer ?? ""} />
@@ -42,6 +43,7 @@ export default async function RelationshipDetailPage({ params, searchParams }: {
       <div className="grid gap-4"><Select label="Priority" name="priority" defaultValue={item.priority ?? ""}><option value="">Not set</option>{["LOW", "MEDIUM", "HIGH", "CRITICAL"].map((p) => <option key={p}>{p}</option>)}</Select><Field label="Priority evidence" name="priorityEvidence" defaultValue={item.priorityEvidence ?? ""} /></div>
       <TextArea label="Commitment (what they agreed to)" name="commitment" rows={2} defaultValue={item.commitment ?? ""} />
       <TextArea label="Outcome" name="outcome" rows={2} defaultValue={item.outcome ?? ""} />
+      <div className="sm:col-span-2"><p className="mb-2 text-xs text-[#747976]">Products this relationship covers</p><CheckboxGroup name="brandIds" items={brands} selectedIds={item.relevantBrands.map((brand) => brand.id)} /></div>
       <div className="sm:col-span-2"><p className="mb-2 text-xs text-[#747976]">Campaigns</p><CheckboxGroup name="campaignIds" items={campaignChoices} selectedIds={[...linkedCampaigns.keys()]} /></div>
       <div><SubmitButton>Save operating fields</SubmitButton></div>
     </form></details>}

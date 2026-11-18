@@ -70,6 +70,11 @@ export function manualDestinationGaps(account: DestinationAccount, brandId: stri
   return gaps;
 }
 
+/** Same-brand KNOWN/ACTIVE accounts an operator has manually verified; the checklist needs at least one per live public brand before content handoff. */
+export function verifiedManualDestinations<T extends DestinationAccount>(accounts: T[], brandId: string) {
+  return accounts.filter((account) => manualDestinationGaps(account, brandId).length === 0);
+}
+
 /** Scheduling accepts API-connected accounts or manually verified known accounts. */
 export function isSchedulableDestination(account: DestinationAccount, brandId: string) {
   if (account.brandId !== brandId) return false;

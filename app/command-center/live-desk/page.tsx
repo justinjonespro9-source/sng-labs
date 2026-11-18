@@ -37,7 +37,7 @@ export default async function LiveDeskPage({ searchParams }: { searchParams: Pro
     byEvent.set(recommendation.eventId!, list);
   }
 
-  return <div><PageHeader title="Live Desk" description="Review deterministic game-day relevance, accept qualified recommendations into the existing Opportunity workflow, and explicitly skip weak signals." />
+  return <div><PageHeader title="Content Opportunity Review" description="Review deterministic game-day relevance, accept qualified recommendations into Content Opportunities, and explicitly skip weak signals. Partnership outreach lives under Relationships." />
     <section className="mt-7 rounded-2xl border border-white/8 bg-[#101214] p-5">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <form className="flex flex-wrap items-end gap-3">

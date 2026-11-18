@@ -11,7 +11,11 @@ function targetHost() {
 
 /**
  * Narrow ExactStat onboarding. Dry run by default; --apply writes.
- * Production requires the explicit, separately approved flag --approved-production-host=<host>.
+ * Production requires separate approval and --approved-production-host=<host>.
+ * See docs/growth-brand-init-approvals.md.
+ *
+ * Dry-run:  npm run growth:init-exactstat
+ * Apply:    npm run growth:init-exactstat -- --apply --approved-production-host=<host>
  */
 async function main() {
   const apply = process.argv.includes("--apply");
