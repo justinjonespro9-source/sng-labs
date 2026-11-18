@@ -12,7 +12,8 @@ import { writeSocialAuditEvent } from "@/lib/social-accounts/audit";
 import { assertActiveCampaignContract, changedMaterialFields, isValidDestinationUrl, parseMoneyToMinor, parseNonNegativeInteger, requiresActiveContract, type CampaignContractInput, type MaterialSnapshot } from "@/lib/growth/campaign-contract";
 import { runFormAction, runFormStateAction } from "@/lib/growth/form-action";
 import type { FormActionState } from "@/lib/growth/form-state";
-import { isSchedulableDestination } from "@/lib/growth/manual-publication";
+import { isSchedulableDestination, validateProfileUrl } from "@/lib/growth/manual-publication";
+import { relationshipOperatingGaps } from "@/lib/growth/relationships";
 import { calendarDayKey, parseCentralInput } from "@/lib/growth/time";
 
 const text = z.string().trim().min(1).max(500);
@@ -143,13 +144,28 @@ export async function createOrganization(formData: FormData) {
 export async function createRelationship(formData: FormData) {
   await runFormAction("/command-center/relationships", async () => {
     const user = await requireEditor();
-    const input = z.object({ name: text, organizationId: text, contactName: z.string().trim().max(200).optional(), contactTitle: z.string().trim().max(200).optional(), summary: optionalText }).parse({
-      name: formData.get("name"), organizationId: formData.get("organizationId"), contactName: String(formData.get("contactName") ?? ""), contactTitle: String(formData.get("contactTitle") ?? ""), summary: formData.get("summary"),
+    const input = z.object({
+      name: text,
+      organizationId: text,
+      contactName: z.string().trim().max(200).optional(),
+      contactTitle: z.string().trim().max(200).optional(),
+      summary: optionalText,
+      nextAction: z.string().trim().min(1).max(2000),
+    }).parse({
+      name: formData.get("name"),
+      organizationId: formData.get("organizationId"),
+      contactName: String(formData.get("contactName") ?? ""),
+      contactTitle: String(formData.get("contactTitle") ?? ""),
+      summary: formData.get("summary"),
+      nextAction: formData.get("nextAction"),
     });
+    const nextFollowUpAt = parseCentralInput(formData.get("nextFollowUpAt"));
+    if (!nextFollowUpAt) throw new Error("Next follow-up date is required for active relationship stages");
     const contact = input.contactName ? await prisma.contact.create({ data: { name: input.contactName, title: input.contactTitle || null, organizationId: input.organizationId } }) : null;
     const relationship = await prisma.relationship.create({ data: {
       name: input.name, organizationId: input.organizationId, contactId: contact?.id, ownerId: user.id, summary: input.summary,
-      nextFollowUpAt: parseCentralInput(formData.get("nextFollowUpAt")),
+      nextAction: input.nextAction,
+      nextFollowUpAt,
       relevantBrands: { connect: ids(formData, "brandIds").map((id) => ({ id })) },
     } });
     await audit(user.id, "relationship.create", "Relationship", relationship.id);
@@ -429,6 +445,10 @@ export async function updateRelationshipStage(relationshipId: string, formData: 
   await runFormAction(`/command-center/relationships/${relationshipId}`, async () => {
     const user = await requireEditor();
     const stage = z.enum(["PROSPECT", "CONTACTED", "CONVERSATION", "OPPORTUNITY", "PARTNER", "CLOSED", "NOT_PURSUING"]).parse(formData.get("stage"));
+    const current = await prisma.relationship.findUnique({ where: { id: relationshipId }, select: { nextAction: true, nextFollowUpAt: true } });
+    if (!current) throw new Error("Relationship not found");
+    const gaps = relationshipOperatingGaps({ stage, nextAction: current.nextAction, nextFollowUpAt: current.nextFollowUpAt });
+    if (gaps.length) throw new Error(`${gaps.join("; ")}. Set them under Edit operating fields before moving to this BD stage.`);
     await prisma.relationship.update({ where: { id: relationshipId }, data: { stage } });
     await audit(user.id, "relationship.stage", "Relationship", relationshipId);
     revalidatePath("/command-center/relationships");
@@ -497,15 +517,28 @@ export async function updateActivation(activationId: string, formData: FormData)
   redirect(`/command-center/campaigns/${activation.campaignId}/activations/${activationId}`);
 }
 
+/** Inventory only: always MANUAL, never connected. Supplying a verification source records manual identity verification (needs a profile URL or handle). */
 export async function createKnownSocialAccount(brandId: string, formData: FormData) {
-  const user = await requireEditor();
-  const platform = z.enum(["X", "INSTAGRAM", "FACEBOOK", "DISCORD", "LINKEDIN", "TIKTOK", "YOUTUBE", "THREADS", "OTHER"]).parse(formData.get("platform"));
-  const accountType = z.enum(["UNKNOWN", "PROFILE", "PAGE", "PROFESSIONAL_ACCOUNT", "GUILD", "CHANNEL", "WEBHOOK_DESTINATION", "OTHER"]).parse(formData.get("accountType") || "UNKNOWN");
-  const handle = String(formData.get("handle") || "").trim() || null;
-  const displayName = String(formData.get("displayName") || "").trim() || null;
-  const profileUrl = String(formData.get("profileUrl") || "").trim() || null;
-  const account = await prisma.socialAccount.create({ data: { brandId, platform, accountType, handle, displayName, profileUrl, lifecycleStatus: "KNOWN", connectionStatus: "NOT_CONNECTED", publishingMode: "MANUAL", publishingEnabled: false, analyticsEnabled: false, communityEnabled: false, autopilotAllowed: false } });
-  await writeSocialAuditEvent(prisma, { actorId: user.id, action: "social_account.inventory.create", entityType: "SocialAccount", entityId: account.id, metadata: { brandId, platform, accountType } });
-  revalidatePath(`/command-center/brands/${brandId}`);
-  revalidatePath("/command-center/settings/integrations");
+  const returnTo = `/command-center/brands/${brandId}`;
+  await runFormAction(returnTo, async () => {
+    const user = await requireEditor();
+    const brand = await prisma.brand.findUnique({ where: { id: brandId }, select: { id: true } });
+    if (!brand) throw new Error("Brand not found");
+    const platform = z.enum(["X", "INSTAGRAM", "FACEBOOK", "DISCORD", "LINKEDIN", "TIKTOK", "YOUTUBE", "THREADS", "OTHER"]).parse(formData.get("platform"));
+    const accountType = z.enum(["UNKNOWN", "PROFILE", "PAGE", "PROFESSIONAL_ACCOUNT", "GUILD", "CHANNEL", "WEBHOOK_DESTINATION", "OTHER"]).parse(formData.get("accountType") || "UNKNOWN");
+    const handle = String(formData.get("handle") || "").trim() || null;
+    const displayName = String(formData.get("displayName") || "").trim() || null;
+    const submittedUrl = String(formData.get("profileUrl") || "").trim();
+    const profileUrl = submittedUrl ? validateProfileUrl(platform, submittedUrl) : null;
+    const verificationSource = String(formData.get("verificationSource") || "").trim() || null;
+    if (verificationSource && !profileUrl && !handle) throw new Error("A verified profile URL or handle is required to record verification");
+    const verifiedAt = verificationSource ? new Date() : null;
+    const account = await prisma.socialAccount.create({ data: { brandId, platform, accountType, handle, displayName, profileUrl, metadataVerifiedAt: verifiedAt, lifecycleStatus: "KNOWN", connectionStatus: "NOT_CONNECTED", publishingMode: "MANUAL", publishingEnabled: false, analyticsEnabled: false, communityEnabled: false, autopilotAllowed: false } });
+    await writeSocialAuditEvent(prisma, { actorId: user.id, action: "social_account.inventory.create", entityType: "SocialAccount", entityId: account.id, metadata: { brandId, platform, accountType } });
+    if (verifiedAt) await writeSocialAuditEvent(prisma, { actorId: user.id, action: "social_account.identity.verify", entityType: "SocialAccount", entityId: account.id, metadata: { method: "MANUAL", source: verificationSource, verifiedAt: verifiedAt.toISOString(), hasProfileUrl: Boolean(profileUrl), hasHandle: Boolean(handle) } });
+    revalidatePath(returnTo);
+    revalidatePath("/command-center/settings/integrations");
+    revalidatePath("/command-center/queue");
+    return { saved: verifiedAt ? "verified" : "account" };
+  });
 }

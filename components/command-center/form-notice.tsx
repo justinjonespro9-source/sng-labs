@@ -16,6 +16,7 @@ const savedMessages: Record<string, string> = {
   organization: "Organization added.",
   relationship: "Relationship added.",
   verified: "Destination identity verified manually and audited.",
+  account: "Account added to inventory as KNOWN and MANUAL. It is not verified for publishing until an operator records verification.",
   handoff: "Manual handoff prepared. Post externally, then record the actual URL and time.",
   published: "Publication recorded as PUBLISHED with audit evidence.",
   "already-recorded": "This publication was already recorded with the same URL. Nothing changed.",

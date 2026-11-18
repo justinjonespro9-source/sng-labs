@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { contentModesToText, eyezOnThePrizeBrandBrain, fantasyTrackBrandBrain, handicapHeroBrandBrain, hasConfiguredBrandBrain, parseContentModes, parseLines, rankEyeQBrandBrain, shouldInitializeBrandBrain, sngLabsBrandBrain, stadiumSlopBrandBrain, teamM8tesBrandBrain } from "./brand-brain";
+import { contentModesToText, eyezOnThePrizeBrandBrain, fantasyTrackBrandBrain, handicapHeroBrandBrain, hasConfiguredBrandBrain, parseContentModes, parseLines, rankEyeQBrandBrain, shouldInitializeBrandBrain, sngLabsBrandBrain, stadiumSlopBrandBrain, teamM8tesBrandBrain, voteYourCastBrandBrain } from "./brand-brain";
 
 describe("Brand Brain", () => {
   it("uses an explicit configuration state", () => {
@@ -72,6 +72,12 @@ describe("Brand Brain", () => {
     expect(fantasyTrackBrandBrain.contentModes.map((mode) => mode.name)).toEqual(["Acquire", "Pick Your Runner", "Pre-Race", "Live Race", "Results", "Long Shot / Breakout", "Public Conviction", "Industry / B2B", "Outreach"]);
     expect(fantasyTrackBrandBrain.aiOperatingInstructions).toContain("Distinguish the simple consumer race story from the B2B self-pricing-field story");
     expect(fantasyTrackBrandBrain.prohibitedContent.some((rule) => rule.includes("Promises of profit"))).toBe(true);
+  });
+
+  it("keeps VoteYourCast pre-launch and forbids live voting claims", () => {
+    expect(voteYourCastBrandBrain.corePromise).toBe("You cast the story.");
+    expect(voteYourCastBrandBrain.prohibitedContent.some((rule) => rule.includes("public voting is live"))).toBe(true);
+    expect(voteYourCastBrandBrain.aiOperatingInstructions.some((rule) => rule.includes("PRE-LAUNCH"))).toBe(true);
   });
 
   it("separates Eyez consumer simplicity from its commercial attention thesis", () => {

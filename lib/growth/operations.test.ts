@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { completedAtFor, thisWeekActions, validateGrowthAction } from "./actions-rules";
 import { accountHealthSummary, isOpenOpportunity, latestSnapshotPerAccount, openOpportunityWhere } from "./dashboard";
-import { assertManualConfirmable, isSchedulableDestination, manualDestinationGaps, validateProfileUrl, validatePublishedAt, validatePublishedUrl } from "./manual-publication";
+import { assertManualConfirmable, isSchedulableDestination, manualDestinationGaps, validateProfileUrl, validatePublishedAt, validatePublishedUrl, verifiedManualDestinations } from "./manual-publication";
 import { groupRelationshipViews, relationshipViewKeys, type RelationshipOperatingRow } from "./relationships";
 
 const now = new Date("2026-10-15T17:00:00Z");
@@ -103,6 +103,12 @@ describe("manual publication guards", () => {
     expect(manualDestinationGaps({ ...verified, metadataVerifiedAt: null }, "brand_rank")[0]).toContain("not been manually verified");
     expect(isSchedulableDestination({ ...verified, metadataVerifiedAt: null, connectionStatus: "CONNECTED" }, "brand_rank")).toBe(true);
     expect(isSchedulableDestination({ ...verified, metadataVerifiedAt: null }, "brand_rank")).toBe(false);
+  });
+
+  it("counts only same-brand manually verified destinations for the handoff checklist", () => {
+    const accounts = [verified, { ...verified, metadataVerifiedAt: null }, { ...verified, lifecycleStatus: "DISABLED" as const }, { ...verified, brandId: "brand_other" }];
+    expect(verifiedManualDestinations(accounts, "brand_rank")).toEqual([verified]);
+    expect(verifiedManualDestinations([], "brand_rank")).toEqual([]);
   });
 
   it("validates the platform URL", () => {

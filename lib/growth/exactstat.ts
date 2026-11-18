@@ -50,7 +50,7 @@ export async function initializeExactStat(db: PrismaClient, options: { actorId?:
         key: definition.key, name: definition.name, shortName: definition.shortName, kind: definition.kind, description: definition.description,
         audience: definition.audience, voice: definition.voice, objectives: definition.objectives, preferredContent: definition.preferredContent,
         prohibitedContent: definition.prohibitedContent, callToActionRules: definition.callToActionRules, visualDirection: definition.visualDirection,
-        defaultCadenceNotes: definition.defaultCadenceNotes, purpose: definition.objectives[0], coreProposition: definition.description, contentPillars: definition.preferredContent, relevantUrls: [],
+        defaultCadenceNotes: definition.defaultCadenceNotes, purpose: definition.objectives[0], coreProposition: definition.description, contentPillars: definition.preferredContent, relevantUrls: ["https://exact-stat.com"],
       }, select: { id: true, brandBrainVersion: true } });
       performed.push("create_brand");
     }
